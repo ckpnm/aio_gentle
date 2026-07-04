@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export SCRIPT_VERSION="1.04"
+export SCRIPT_VERSION="1.05"
 export GITHUB_URL="https://github.com/ckpnm/aio_gentle"
 export UPDATE_NEEDED=0
 
