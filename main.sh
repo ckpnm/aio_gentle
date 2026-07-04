@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export SCRIPT_VERSION="1.05"
+export SCRIPT_VERSION="1.14"
 export GITHUB_URL="https://github.com/ckpnm/aio_gentle"
 export UPDATE_NEEDED=0
 
@@ -63,7 +63,7 @@ draw_header() {
 
     local total_width=37
    
-    local title_text="AIO - GENTLE "
+    local title_text="Λ I Ø - G E N T Ł E "
     local ver_text="v${SCRIPT_VERSION}"
     local title_len=$(( ${#title_text} + ${#ver_text} ))
     local pad_left=$(( (total_width - title_len) / 2 ))
@@ -72,7 +72,7 @@ draw_header() {
     local p_l=$(printf "%${pad_left}s" "")
     local p_r=$(printf "%${pad_right}s" "")
 
-    local sub_text="utility"
+    local sub_text="by •skrım—"
     local sub_len=${#sub_text}
     local sub_pad_left=$(( pad_left + title_len - sub_len ))
     local sub_pad_right=$(( total_width - sub_pad_left - sub_len ))
@@ -242,6 +242,18 @@ step_uninstall_script() {
     fi
 }
 
+step_info() {
+    draw_sub_header "Информация и Благодарности"
+    echo -e "  ${C_WHITE}Огромная благодарность авторам открытых скриптов и списков,${C_BASE}"
+    echo -e "  ${C_WHITE}которые были использованы или адаптированы в этой утилите:${C_BASE}\n"
+    
+    echo -e "  ${C_ACCENT}● Zover1337${C_BASE} — ${C_DIM}https://github.com/Zover1337${C_BASE}"
+    echo -e "  ${C_ACCENT}● jaywehosl${C_BASE} — ${C_DIM}https://github.com/jaywehosl${C_BASE}"
+    echo -e "  ${C_ACCENT}● Loorrr293${C_BASE} — ${C_DIM}https://github.com/Loorrr293${C_BASE}\n"
+    
+    echo -e "  ${C_WHITE}Также спасибо всем мейнтейнерам Xray, Remnawave и других проектов.${C_BASE}"
+}
+
 # ПОДГРУЗКА ВНЕШНИХ МОДУЛЕЙ (ЕСЛИ ОНИ ЕСТЬ)
 if [ -d "$MODULES_DIR" ]; then
     while IFS= read -r -d '' f; do
@@ -366,7 +378,7 @@ step_caddy_selfsteal() {
 }
 
 step_remnanode_setup() {
-    draw_sub_header "Установка Remnanode"
+    draw_sub_header "Развертывание Remnanode"
     read -p "Введите SecretKey из вашей панели Remnawave: " SECRET_KEY
     if [[ -z "$SECRET_KEY" ]]; then
         echo -e "${C_ERR}Ошибка: Ключ отсутствует!${C_BASE}"
@@ -507,7 +519,7 @@ EOF_SRV
 }
 
 step_block_custom_list() {
-    draw_sub_header "Auto IPTables (АНТИ ГРЧЦ)"
+    draw_sub_header "Блокировка по URL (nftables)"
     _do_block_nft() {
         export DEBIAN_FRONTEND=noninteractive
         LIST_URL="https://raw.githubusercontent.com/Loorrr293/blocklist/main/blocklist.txt"
@@ -626,6 +638,27 @@ step_warp_setup() {
         bash <(curl -fsSL https://raw.githubusercontent.com/distillium/warp-native/main/install.sh)
     }
     run_task "Установка native-клиента WARP" "_do_warp"
+}
+
+step_speedtest() {
+    draw_sub_header "Speedtest (Ookla)"
+    
+    _do_install_speedtest() {
+        if ! command -v speedtest &> /dev/null; then
+            curl -sSL "https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-linux-x86_64.tgz" -o /tmp/speedtest.tgz
+            tar -zxf /tmp/speedtest.tgz -C /tmp
+            mv /tmp/speedtest /usr/local/bin/speedtest
+            chmod +x /usr/local/bin/speedtest
+            rm -f /tmp/speedtest.tgz /tmp/speedtest.*
+        fi
+    }
+    
+    run_task "Установка Ookla Speedtest CLI" "_do_install_speedtest"
+    
+    echo -e "\n${C_DIM}Запуск тестирования сети...${C_BASE}\n"
+    # Запускаем открыто в терминале, чтобы юзер видел анимацию загрузки
+    speedtest --accept-license --accept-gdpr
+    echo
 }
 
 step_show_reality() {
@@ -1711,7 +1744,7 @@ options=(
     "Изменение SSH порта"
     "Настройка брандмауэра UFW"
     "Установка Fail2Ban"
-    "--- УСТАНОВКА REMNAWAVE ---"
+    "--- РАЗВЕРТЫВАНИЕ REMNAWAVE ---"
     "Установка Docker & Compose"
     "Caddy Selfsteal (Сертификаты)"
     "Установка Remnanode (Docker)"
@@ -1719,12 +1752,14 @@ options=(
     "--- ЗАЩИТА И ДОПОЛНЕНИЯ ---"
     "Установка Traffic Guard"
     "Блокировка Leaseweb & HE (iptables)"
-    "Auto IPTables (АНТИ ГРЧЦ)"
+    "Блокировка по URL (nftables)"
     "Установка Cloudflare WARP"
     "--- ДИАГНОСТИКА ---"
     "Получить Reality ключи и инфо"
-    "IP Region Чекер"
+    "IP Region Check"
+    "Speedtest (Ookla)"
     "--- СКРИПТ ---"
+    "Информация"
     "Обновить утилиту"
     "Удалить утилиту"
     "Выход"
@@ -1750,10 +1785,12 @@ while true; do
         "Настройка ротации логов Xray")  step_logrotate_xray ;;
         "Установка Traffic Guard")       step_traffic_guard_setup ;;
         "Блокировка Leaseweb & HE (iptables)") step_block_asn ;;
-        "Auto IPTables (АНТИ ГРЧЦ)")  step_block_custom_list ;;
+        "Блокировка по URL (nftables)")  step_block_custom_list ;;
         "Установка Cloudflare WARP")     step_warp_setup ;;
         "Получить Reality ключи и инфо") step_show_reality ;;
         "IP Region Check")               step_ipregion ;;
+        "Speedtest (Ookla)")             step_speedtest ;;
+        "Информация")                    step_info ;;
         "Обновить утилиту")              step_update_script ;;
         "Удалить утилиту")               step_uninstall_script ;;
         "Выход") cursor_on; exit 0 ;;
