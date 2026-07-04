@@ -1,7 +1,7 @@
 #!/bin/bash
 
 export SCRIPT_VERSION="1.09"
-export GITHUB_URL="https://github.com/ckpnm/aio_gentle_utility"
+export GITHUB_URL="https://github.com/ckpnm/aio_gentle"
 export UPDATE_NEEDED=0
 
 # Реальный путь к main.sh, даже если он запущен через симлинк
