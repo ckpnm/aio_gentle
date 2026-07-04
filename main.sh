@@ -63,7 +63,7 @@ draw_header() {
 
     local total_width=37
    
-    local title_text="A I O - GENTLE "
+    local title_text="AIO - GENTLE "
     local ver_text="v${SCRIPT_VERSION}"
     local title_len=$(( ${#title_text} + ${#ver_text} ))
     local pad_left=$(( (total_width - title_len) / 2 ))
@@ -72,7 +72,7 @@ draw_header() {
     local p_l=$(printf "%${pad_left}s" "")
     local p_r=$(printf "%${pad_right}s" "")
 
-    local sub_text="by •skrım— and Zover1337"
+    local sub_text="by •skrım— & Zover1337"
     local sub_len=${#sub_text}
     local sub_pad_left=$(( pad_left + title_len - sub_len ))
     local sub_pad_right=$(( total_width - sub_pad_left - sub_len ))
@@ -215,7 +215,7 @@ wait_for_apt() { while apt-get check 2>&1 | grep -q "lock"; do sleep 5; done; }
 
 step_update_script() {
     draw_sub_header "Обновление утилиты"
-    if curl -s --max-time 10 "https://raw.githubusercontent.com/ckpnm/aio_gentle_utility/main/main.sh" -o "$SCRIPT_DIR/main.sh"; then
+    if curl -s --max-time 10 "https://raw.githubusercontent.com/ckpnm/aio_gentle/main/main.sh" -o "$SCRIPT_DIR/main.sh"; then
         chmod +x "$SCRIPT_DIR/main.sh"
         echo -e "${C_OK}Скрипт успешно обновлен! Перезапуск...${C_BASE}"
         sleep 2
@@ -378,27 +378,27 @@ step_remnanode_setup() {
         mkdir -p /var/log/xray
         chmod 777 /var/log/xray
 
-        cat << EOF > /opt/remnanode/docker-compose.yml
-services:
-  remnanode:
-    container_name: remnanode
-    hostname: remnanode
-    image: remnawave/node:2.7.0
-    network_mode: host
-    restart: always
-    cap_add:
-      - NET_ADMIN
-    ulimits:
-      nofile:
-        soft: 1048576
-        hard: 1048576
-    environment:
-      - NODE_PORT=2222
-      - SECRET_KEY=${SECRET_KEY}
-    volumes:
-      - '/var/log/xray:/var/log/xray'
-      - /etc/letsencrypt:/etc/letsencrypt:ro
-EOF
+        # Переписано на echo для иммунитета к форматированию отступов
+        echo "services:" > /opt/remnanode/docker-compose.yml
+        echo "  remnanode:" >> /opt/remnanode/docker-compose.yml
+        echo "    container_name: remnanode" >> /opt/remnanode/docker-compose.yml
+        echo "    hostname: remnanode" >> /opt/remnanode/docker-compose.yml
+        echo "    image: remnawave/node:2.7.0" >> /opt/remnanode/docker-compose.yml
+        echo "    network_mode: host" >> /opt/remnanode/docker-compose.yml
+        echo "    restart: always" >> /opt/remnanode/docker-compose.yml
+        echo "    cap_add:" >> /opt/remnanode/docker-compose.yml
+        echo "      - NET_ADMIN" >> /opt/remnanode/docker-compose.yml
+        echo "    ulimits:" >> /opt/remnanode/docker-compose.yml
+        echo "      nofile:" >> /opt/remnanode/docker-compose.yml
+        echo "        soft: 1048576" >> /opt/remnanode/docker-compose.yml
+        echo "        hard: 1048576" >> /opt/remnanode/docker-compose.yml
+        echo "    environment:" >> /opt/remnanode/docker-compose.yml
+        echo "      - NODE_PORT=2222" >> /opt/remnanode/docker-compose.yml
+        echo "      - SECRET_KEY=${SECRET_KEY}" >> /opt/remnanode/docker-compose.yml
+        echo "    volumes:" >> /opt/remnanode/docker-compose.yml
+        echo "      - '/var/log/xray:/var/log/xray'" >> /opt/remnanode/docker-compose.yml
+        echo "      - /etc/letsencrypt:/etc/letsencrypt:ro" >> /opt/remnanode/docker-compose.yml
+
         cd /opt/remnanode
         docker compose down &>/dev/null || true
         docker compose up -d
@@ -409,16 +409,14 @@ EOF
 step_logrotate_xray() {
     draw_sub_header "Ротация логов Xray"
     _do_logrotate() {
-        cat << 'EOF' > /etc/logrotate.d/xray
-/var/log/xray/*.log {
-      size 50M
-      rotate 5
-      compress
-      missingok
-      notifempty
-      copytruncate
-}
-EOF
+        echo "/var/log/xray/*.log {" > /etc/logrotate.d/xray
+        echo "      size 50M" >> /etc/logrotate.d/xray
+        echo "      rotate 5" >> /etc/logrotate.d/xray
+        echo "      compress" >> /etc/logrotate.d/xray
+        echo "      missingok" >> /etc/logrotate.d/xray
+        echo "      notifempty" >> /etc/logrotate.d/xray
+        echo "      copytruncate" >> /etc/logrotate.d/xray
+        echo "}" >> /etc/logrotate.d/xray
     }
     run_task "Применение конфигурации Logrotate" "_do_logrotate"
 }
@@ -442,7 +440,7 @@ step_block_asn() {
         apt-get update -y
         apt-get install -y -qq -o=Dpkg::Use-Pty=0 ipset iptables-persistent whois curl
 
-        cat << 'EOF' > /usr/local/bin/block_leaseweb.sh
+cat << 'EOF_ASN' > /usr/local/bin/block_leaseweb.sh
 #!/bin/bash
 ASNS=("AS16265" "AS60781" "AS28753" "AS30633" "AS38731" "AS49367" "AS51395" "AS50673" "AS59253" "AS133752" "AS134351" "AS6939")
 ipset create leaseweb_v4 hash:net family inet hashsize 4096 maxelem 131072 2>/dev/null
@@ -460,10 +458,11 @@ ipset swap leaseweb_v6 tmp_v6
 ipset destroy tmp_v4
 ipset destroy tmp_v6
 ipset save > /etc/ipset.conf
-EOF
+EOF_ASN
+
         chmod +x /usr/local/bin/block_leaseweb.sh
 
-        cat << 'EOF' > /etc/systemd/system/ipset-persistent.service
+cat << 'EOF_SRV' > /etc/systemd/system/ipset-persistent.service
 [Unit]
 Description=Restore ipset sets before iptables
 Before=network.target netfilter-persistent.service
@@ -475,7 +474,8 @@ ExecStop=/sbin/ipset save -file /etc/ipset.conf
 RemainAfterExit=yes
 [Install]
 WantedBy=multi-user.target
-EOF
+EOF_SRV
+
         systemctl daemon-reload
         systemctl enable ipset-persistent
 
@@ -516,7 +516,7 @@ step_block_custom_list() {
         apt-get update -y
         apt-get install -y nftables curl python3
 
-        tee /usr/local/sbin/update-blocklist-nft.sh > /dev/null <<'SH'
+cat << 'EOF_NFT' > /usr/local/sbin/update-blocklist-nft.sh
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -590,11 +590,11 @@ PY
 } > "$nf"
 
 nft -f "$nf"
-SH
+EOF_NFT
 
         chmod +x /usr/local/sbin/update-blocklist-nft.sh
 
-        tee /etc/systemd/system/blocklist-update.service > /dev/null <<UNIT
+cat << 'EOF_UNIT' > /etc/systemd/system/blocklist-update.service
 [Unit]
 After=network-online.target
 Wants=network-online.target
@@ -602,9 +602,9 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/update-blocklist-nft.sh ${LIST_URL}
-UNIT
+EOF_UNIT
 
-        tee /etc/systemd/system/blocklist-update.timer > /dev/null <<'TIMER'
+cat << 'EOF_TIMER' > /etc/systemd/system/blocklist-update.timer
 [Timer]
 OnBootSec=1min
 OnCalendar=daily
@@ -612,7 +612,7 @@ Persistent=true
 
 [Install]
 WantedBy=timers.target
-TIMER
+EOF_TIMER
 
         systemctl daemon-reload
         systemctl enable --now blocklist-update.timer
@@ -656,7 +656,7 @@ step_ipregion() {
     draw_sub_header "IP Region Check"
     echo -e "${C_DIM}Инициализация и запуск проверки IP Region...${C_BASE}\n"
     
-    cat << 'IPREGION_EOF' > /usr/local/bin/ipregion
+cat << 'EOF_IPREGION' > /usr/local/bin/ipregion
 #!/usr/bin/env bash
 
 SCRIPT_NAME="ipregion.sh"
@@ -894,10 +894,7 @@ IPV6_OVER_IPV4_SERVICES=(
 )
 
 color() {
-  local color_name="$1"
-  local text="$2"
-  local code
-
+  local color_name="$1" text="$2" code
   case "$color_name" in
     HEADER) code="$COLOR_HEADER" ;;
     SERVICE) code="$COLOR_SERVICE" ;;
@@ -913,50 +910,34 @@ color() {
     RESET) code="$COLOR_RESET" ;;
     *) code="$color_name" ;;
   esac
-
   printf "\033[%sm%s\033[0m" "$code" "$text"
 }
 
-bold() {
-  local text="$1"
-  printf "\033[1m%s\033[0m" "$text"
-}
-
-get_timestamp() {
-  local format="$1"
-  date +"$format"
-}
+bold() { printf "\033[1m%s\033[0m" "$1"; }
+get_timestamp() { date +"$1"; }
 
 log() {
-  local log_level="$1"
-  local message="${*:2}"
-  local timestamp
-
+  local log_level="$1" message="${*:2}" timestamp color_code
   if [[ "$VERBOSE" == true ]]; then
-    local color_code
     timestamp=$(get_timestamp "%d.%m.%Y %H:%M:%S")
-
     case "$log_level" in
       "$LOG_ERROR") color_code=ERROR ;;
       "$LOG_WARN") color_code=WARN ;;
       "$LOG_INFO") color_code=INFO ;;
       *) color_code=RESET ;;
     esac
-
     printf "[%s] [%s]: %s\n" "$timestamp" "$(color $color_code "$log_level")" "$message" >&2
   fi
 }
 
 error_exit() {
-  local message="$1"
-  local exit_code="${2:-1}"
+  local message="$1" exit_code="${2:-1}"
   printf "%s %s\n" "$(color ERROR '[ERROR]')" "$(color TABLE_HEADER "$message")" >&2
   display_help
   exit "$exit_code"
 }
 
-display_help() {
-  cat <<EOF
+display_help() { cat <<EOF
 Usage: $SCRIPT_NAME [OPTIONS]
 EOF
 }
@@ -972,22 +953,13 @@ setup_debug() {
 
 grep_wrapper() {
   local grep_args=()
-  if [[ "$1" == "--perl" ]]; then
-    grep_args+=("-oP")
-    shift
-  fi
+  if [[ "$1" == "--perl" ]]; then grep_args+=("-oP"); shift; fi
   grep "${grep_args[@]}" "$@"
 }
 
 upload_debug() {
-  local ip_version=4
-  local user_agent="ipregion-script/1.0 (github.com/vernette/ipregion)"
-  curl_wrapper POST "https://0x0.st" \
-    --user-agent "$user_agent" \
-    --form "file=@$DEBUG_LOG_FILE" \
-    --form "secret=" \
-    --form "expires=24" \
-    --ip-version "$ip_version"
+  local ip_version=4 user_agent="ipregion-script/1.0 (github.com/vernette/ipregion)"
+  curl_wrapper POST "https://0x0.st" --user-agent "$user_agent" --form "file=@$DEBUG_LOG_FILE" --form "secret=" --form "expires=24" --ip-version "$ip_version"
 }
 
 cleanup_debug() {
@@ -1002,14 +974,9 @@ cleanup_debug() {
 is_command_available() { command -v "$1" >/dev/null 2>&1; }
 
 detect_distro() {
-  if [[ -f /etc/os-release ]]; then
-    source /etc/os-release
-    distro="$ID"
-  elif [[ -f /etc/redhat-release ]]; then
-    distro="rhel"
-  elif [[ -d /data/data/com.termux ]]; then
-    distro="termux"
-  fi
+  if [[ -f /etc/os-release ]]; then source /etc/os-release; distro="$ID"
+  elif [[ -f /etc/redhat-release ]]; then distro="rhel"
+  elif [[ -d /data/data/com.termux ]]; then distro="termux"; fi
 }
 
 detect_package_manager() {
@@ -1018,9 +985,7 @@ detect_package_manager() {
     ubuntu | debian | termux) pkg_manager="apt" ;;
     arch | manjaro) pkg_manager="pacman" ;;
     fedora) pkg_manager="dnf" ;;
-    centos | rhel)
-      if is_command_available "dnf"; then pkg_manager="dnf"
-      else pkg_manager="yum"; fi ;;
+    centos | rhel) if is_command_available "dnf"; then pkg_manager="dnf"; else pkg_manager="yum"; fi ;;
     opensuse*) pkg_manager="zypper" ;;
     alpine) pkg_manager="apk" ;;
     *) error_exit "Unknown distro: $distro" ;;
@@ -1030,20 +995,13 @@ detect_package_manager() {
 
 get_missing_commands() {
   local missing=()
-  for cmd in "${!DEPENDENCIES[@]}"; do
-    if ! is_command_available "$cmd"; then missing+=("$cmd"); fi
-  done
+  for cmd in "${!DEPENDENCIES[@]}"; do if ! is_command_available "$cmd"; then missing+=("$cmd"); fi; done
   printf '%s\n' "${missing[@]}"
 }
 
 get_package_name() {
-  local pkg_manager="$1"
-  local command="$2"
-  local mapping_key="${pkg_manager}:${command}"
-  if [[ -n "${PACKAGE_MAPPING[$mapping_key]}" ]]; then
-    echo "${PACKAGE_MAPPING[$mapping_key]}"
-    return
-  fi
+  local pkg_manager="$1" command="$2" mapping_key="${pkg_manager}:${command}"
+  if [[ -n "${PACKAGE_MAPPING[$mapping_key]}" ]]; then echo "${PACKAGE_MAPPING[$mapping_key]}"; return; fi
   echo "${DEPENDENCIES[$command]:-$command}"
 }
 
@@ -1053,8 +1011,7 @@ is_sudo_required() {
 }
 
 get_install_args() {
-  local pkg_manager="$1"
-  local install_args
+  local pkg_manager="$1" install_args
   case "$pkg_manager" in
     apt) install_args=("install" "-y") ;;
     pacman) install_args=("-Sy" "--noconfirm") ;;
@@ -1067,34 +1024,25 @@ get_install_args() {
 install_packages() {
   local pkg_manager="$1"
   shift
-  local packages=("$@")
-  local cmd_prefix=()
-  local install_cmd=()
+  local packages=("$@") cmd_prefix=() install_cmd=()
   if is_sudo_required; then cmd_prefix=("sudo"); fi
   cmd_prefix+=("$pkg_manager")
-  if [[ "$pkg_manager" == "apt" ]]; then
-    "${cmd_prefix[@]}" update >/dev/null 2>&1 || true
-  fi
+  if [[ "$pkg_manager" == "apt" ]]; then "${cmd_prefix[@]}" update >/dev/null 2>&1 || true; fi
   read -ra install_args <<<"$(get_install_args "$pkg_manager")"
   install_cmd+=("${cmd_prefix[@]}" "${install_args[@]}" "${packages[@]}")
   "${install_cmd[@]}" >/dev/null 2>&1 || true
 }
 
 prompt_for_installation() {
-  local missing=("$@")
-  local response
+  local missing=("$@") response
   printf "\n%s\n%s " "$(color WARN 'Missing dependencies. Do you want to install them? [y/N]:')"
   read -r response
   response=${response,,}
-  case "$response" in
-    y | yes) return 0 ;;
-    *) return 1 ;;
-  esac
+  case "$response" in y | yes) return 0 ;; *) return 1 ;; esac
 }
 
 install_dependencies() {
-  local missing_dependencies=()
-  local missing_commands pkg_manager package_name
+  local missing_dependencies=() missing_commands pkg_manager package_name
   mapfile -t missing_commands < <(get_missing_commands)
   if [[ "${missing_commands[*]}" =~ ^[[:space:]]*$ ]]; then return 0; fi
   pkg_manager=$(detect_package_manager)
@@ -1105,14 +1053,10 @@ install_dependencies() {
   install_packages "$pkg_manager" "${missing_dependencies[@]}"
 }
 
-is_valid_json() {
-  local json="$1"
-  jq -e . >/dev/null 2>&1 <<<"$json"
-}
+is_valid_json() { jq -e . >/dev/null 2>&1 <<<"$1"; }
 
 process_json() {
-  local json="$1"
-  local jq_filter="$2"
+  local json="$1" jq_filter="$2"
   if is_status_string "$json"; then echo "$json"; return; fi
   jq -r "$jq_filter" <<<"$json"
 }
@@ -1128,25 +1072,13 @@ format_value() {
 }
 
 print_value_or_colored() {
-  local value="$1"
-  local color_name="$2"
+  local value="$1" color_name="$2"
   if [[ "$JSON_OUTPUT" == true ]]; then echo "$value"; return; fi
   color "$color_name" "$value"
 }
 
-mask_ipv4() {
-  local ip="$1"
-  echo "${ip%.*.*}.*.*"
-}
-
-mask_ipv6() {
-  local ip="$1"
-  echo "$ip" | awk -F: '{
-    for(i=1;i<=NF;i++) if($i=="") $i="0";
-    while(NF<8) for(i=1;i<=8;i++) if($i=="0"){NF++; break;}
-    printf "%s:%s:%s::\n", $1, $2, $3
-  }'
-}
+mask_ipv4() { echo "${1%.*.*}.*.*"; }
+mask_ipv6() { echo "$1" | awk -F: '{ for(i=1;i<=NF;i++) if($i=="") $i="0"; while(NF<8) for(i=1;i<=8;i++) if($i=="0"){NF++; break;} printf "%s:%s:%s::\n", $1, $2, $3 }'; }
 
 parse_arguments() {
   while [[ $# -gt 0 ]]; do
@@ -1167,39 +1099,24 @@ parse_arguments() {
 }
 
 is_status_string() {
-  local value="$1"
-  case "$value" in
-    "$STATUS_DENIED" | "$STATUS_SERVER_ERROR" | "$STATUS_RATE_LIMIT" | "$STATUS_NA") return 0 ;;
-    *) return 1 ;;
-  esac
+  case "$1" in "$STATUS_DENIED" | "$STATUS_SERVER_ERROR" | "$STATUS_RATE_LIMIT" | "$STATUS_NA") return 0 ;; *) return 1 ;; esac
 }
 
 status_from_http_code() {
-  local code="$1"
-  case "$code" in
-    403) echo "$STATUS_DENIED" ;;
-    429) echo "$STATUS_RATE_LIMIT" ;;
-    5*) echo "$STATUS_SERVER_ERROR" ;;
-    4*) echo "$STATUS_NA" ;;
-    *) echo "" ;;
+  case "$1" in
+    403) echo "$STATUS_DENIED" ;; 429) echo "$STATUS_RATE_LIMIT" ;; 5*) echo "$STATUS_SERVER_ERROR" ;; 4*) echo "$STATUS_NA" ;; *) echo "" ;;
   esac
 }
 
 get_ping_command() {
-  local version="$1"
-  local ping_cmd
-  if [[ "$version" == "4" ]]; then
-    if is_command_available "ping"; then ping_cmd="ping"; fi
-  else
-    if is_command_available "ping6"; then ping_cmd="ping6"
-    elif is_command_available "ping"; then ping_cmd="ping -6"; fi
-  fi
+  local version="$1" ping_cmd
+  if [[ "$version" == "4" ]]; then if is_command_available "ping"; then ping_cmd="ping"; fi
+  else if is_command_available "ping6"; then ping_cmd="ping6"; elif is_command_available "ping"; then ping_cmd="ping -6"; fi; fi
   if [[ -n "$ping_cmd" ]]; then echo "$ping_cmd"; return 0; else return 1; fi
 }
 
 check_ip_interfaces() {
-  local version="$1"
-  if [[ -n $(ip -"${version}" addr show scope global 2>/dev/null) ]]; then return 0; fi
+  if [[ -n $(ip -"$1" addr show scope global 2>/dev/null) ]]; then return 0; fi
   return 1
 }
 
@@ -1210,8 +1127,7 @@ check_ip_connectivity() {
   local timeout=3 count=1 test_hosts ping_cmd
   ping_cmd=($(get_ping_command "$version"))
   if [[ ${#ping_cmd[@]} -eq 0 ]]; then return 1; fi
-  if [[ "$version" == "4" ]]; then test_hosts=("${test_hosts_v4[@]}")
-  else test_hosts=("${test_hosts_v6[@]}"); fi
+  if [[ "$version" == "4" ]]; then test_hosts=("${test_hosts_v4[@]}"); else test_hosts=("${test_hosts_v6[@]}"); fi
   for host in "${test_hosts[@]}"; do
     if "${ping_cmd[@]}" -c "$count" -W "$timeout" "$host" >/dev/null 2>&1; then return 0; fi
   done
@@ -1227,12 +1143,9 @@ check_ip_dns() {
 
 check_ip_support() {
   local version="$1"
-  local -a checks=("interfaces" "connectivity" "dns")
-  local -a failed=()
+  local -a checks=("interfaces" "connectivity" "dns") failed=()
   spinner_update "IPv$version support"
-  for check in "${checks[@]}"; do
-    if ! "check_ip_${check}" "$version"; then failed+=("$check"); fi
-  done
+  for check in "${checks[@]}"; do if ! "check_ip_${check}" "$version"; then failed+=("$check"); fi; done
   if [[ ${#failed[@]} -eq 0 ]]; then return 0; else return 1; fi
 }
 
@@ -1248,17 +1161,12 @@ shuffle_identity_services() {
   size=${#IDENTITY_SERVICES[@]}
   for ((i = size - 1; i > 0; i--)); do
     rand_idx=$((RANDOM % (i + 1)))
-    if ((rand_idx != i)); then
-      tmp=${IDENTITY_SERVICES[i]}
-      IDENTITY_SERVICES[i]=${IDENTITY_SERVICES[rand_idx]}
-      IDENTITY_SERVICES[rand_idx]=$tmp
-    fi
+    if ((rand_idx != i)); then tmp=${IDENTITY_SERVICES[i]}; IDENTITY_SERVICES[i]=${IDENTITY_SERVICES[rand_idx]}; IDENTITY_SERVICES[rand_idx]=$tmp; fi
   done
 }
 
 fetch_ip_from_service() {
-  local service="$1" ip_version="$2" response
-  response=$(curl_wrapper GET "https://$service" --ip-version "$ip_version")
+  local response=$(curl_wrapper GET "https://$1" --ip-version "$2")
   if [[ -n "$response" ]]; then echo "$response"; fi
 }
 
@@ -1280,42 +1188,24 @@ discover_external_ips() {
 get_asn() {
   local ip_version=4 response traits
   spinner_update "ASN info"
-  response=$(curl_wrapper GET "https://geoip.maxmind.com/geoip/v2.1/city/me" \
-    --header "Referer: https://www.maxmind.com" \
-    --ip-version "$ip_version")
+  response=$(curl_wrapper GET "https://geoip.maxmind.com/geoip/v2.1/city/me" --header "Referer: https://www.maxmind.com" --ip-version "$ip_version")
   traits=$(process_json "$response" ".traits")
   asn=$(process_json "$traits" ".autonomous_system_number")
   asn_name=$(process_json "$traits" ".autonomous_system_organization")
 }
 
 get_registered_country() {
-  local ip_version="$1" response
-  response=$(curl_wrapper GET "https://geoip.maxmind.com/geoip/v2.1/city/me" \
-    --header "Referer: https://www.maxmind.com" \
-    --ip-version "$ip_version")
+  local response=$(curl_wrapper GET "https://geoip.maxmind.com/geoip/v2.1/city/me" --header "Referer: https://www.maxmind.com" --ip-version "$1")
   process_json "$response" ".registered_country.names.en"
 }
 
 get_iata_location() {
-  local iata_code="$1"
-  local url="https://www.air-port-codes.com/api/v1/single"
-  local payload="iata=$iata_code"
-  local apc_auth="96dc04b3fb"
-  local referer="https://www.air-port-codes.com/"
-  local ip_version=4 response
-  response=$(curl_wrapper POST "$url" \
-    --header "APC-Auth: $apc_auth" \
-    --header "Referer: $referer" \
-    --data "$payload" \
-    --ip-version "$ip_version")
+  local response=$(curl_wrapper POST "https://www.air-port-codes.com/api/v1/single" --header "APC-Auth: 96dc04b3fb" --header "Referer: https://www.air-port-codes.com/" --data "iata=$1" --ip-version 4)
   process_json "$response" ".airport.country.iso"
 }
 
 is_ipv6_over_ipv4_service() {
-  local service="$1"
-  for s in "${IPV6_OVER_IPV4_SERVICES[@]}"; do
-    [[ "$s" == "$service" ]] && return 0
-  done
+  for s in "${IPV6_OVER_IPV4_SERVICES[@]}"; do [[ "$s" == "$1" ]] && return 0; done
   return 1
 }
 
@@ -1337,23 +1227,11 @@ spinner_start() {
 
 spinner_stop() {
   spinner_running=false
-  if [[ -n "$spinner_pid" ]]; then
-    kill "$spinner_pid" 2>/dev/null
-    wait "$spinner_pid" 2>/dev/null
-    spinner_pid=""
-    printf "\\r%*s\\r" 40 " "
-  fi
-  if [[ -f "$SPINNER_SERVICE_FILE" ]]; then
-    rm -f "$SPINNER_SERVICE_FILE"
-    unset SPINNER_SERVICE_FILE
-  fi
+  if [[ -n "$spinner_pid" ]]; then kill "$spinner_pid" 2>/dev/null; wait "$spinner_pid" 2>/dev/null; spinner_pid=""; printf "\\r%*s\\r" 40 " "; fi
+  if [[ -f "$SPINNER_SERVICE_FILE" ]]; then rm -f "$SPINNER_SERVICE_FILE"; unset SPINNER_SERVICE_FILE; fi
 }
 
-spinner_update() {
-  local value="$1"
-  if [[ -n "$SPINNER_SERVICE_FILE" ]]; then echo "$value" >"$SPINNER_SERVICE_FILE"; fi
-}
-
+spinner_update() { if [[ -n "$SPINNER_SERVICE_FILE" ]]; then echo "$1" >"$SPINNER_SERVICE_FILE"; fi; }
 spinner_cleanup() { spinner_stop; exit 130; }
 
 curl_wrapper() {
@@ -1364,13 +1242,8 @@ curl_wrapper() {
   case "$method" in HEAD) curl_args+=(--head) ;; *) curl_args+=(--request "$method") ;; esac
   while (($#)); do
     case "$1" in
-      --ip-version) ip_version="$2"; shift 2 ;;
-      --user-agent) user_agent="$2"; shift 2 ;;
-      --header) headers+=("$2"); shift 2 ;;
-      --json) json="$2"; shift 2 ;;
-      --data) data="$2"; shift 2 ;;
-      --file) file="$2"; shift 2 ;;
-      --form) forms+=("$2"); shift 2 ;;
+      --ip-version) ip_version="$2"; shift 2 ;; --user-agent) user_agent="$2"; shift 2 ;; --header) headers+=("$2"); shift 2 ;;
+      --json) json="$2"; shift 2 ;; --data) data="$2"; shift 2 ;; --file) file="$2"; shift 2 ;; --form) forms+=("$2"); shift 2 ;;
     esac
   done
   if [[ "$ip_version" == "4" ]]; then curl_args+=(-4); else curl_args+=(-6); fi
@@ -1424,29 +1297,18 @@ process_response() {
   if [[ "$response_format" == "plain" ]]; then echo "$response" | tr -d '\r\n '; return; fi
   if ! is_valid_json "$response"; then return 1; fi
   case "$service" in
-    MAXMIND) jq_filter='.country.iso_code' ;;
-    RIPE) jq_filter='.country' ;;
-    IP2LOCATION_IO) jq_filter='.country_code' ;;
-    IPINFO_IO) jq_filter='.data.country' ;;
-    IPREGISTRY) jq_filter='.location.country.code' ;;
-    IPAPI_CO) jq_filter='.country' ;;
-    CLOUDFLARE) jq_filter='.country' ;;
-    COUNTRY_IS) jq_filter='.country' ;;
-    GEOAPIFY_COM) jq_filter='.country.iso_code' ;;
-    GEOJS_IO) jq_filter='.[0].country' ;;
-    IPAPI_IS) jq_filter='.location.country_code' ;;
-    IPBASE_COM) jq_filter='.data.location.country.alpha2' ;;
-    IPQUERY_IO) jq_filter='.location.country_code' ;;
-    IPWHO_IS) jq_filter='.country_code' ;;
-    IPAPI_COM) jq_filter='.countryCode' ;;
+    MAXMIND) jq_filter='.country.iso_code' ;; RIPE) jq_filter='.country' ;; IP2LOCATION_IO) jq_filter='.country_code' ;;
+    IPINFO_IO) jq_filter='.data.country' ;; IPREGISTRY) jq_filter='.location.country.code' ;; IPAPI_CO) jq_filter='.country' ;;
+    CLOUDFLARE) jq_filter='.country' ;; COUNTRY_IS) jq_filter='.country' ;; GEOAPIFY_COM) jq_filter='.country.iso_code' ;;
+    GEOJS_IO) jq_filter='.[0].country' ;; IPAPI_IS) jq_filter='.location.country_code' ;; IPBASE_COM) jq_filter='.data.location.country.alpha2' ;;
+    IPQUERY_IO) jq_filter='.location.country_code' ;; IPWHO_IS) jq_filter='.country_code' ;; IPAPI_COM) jq_filter='.countryCode' ;;
     *) echo "$response" ;;
   esac
   process_json "$response" "$jq_filter"
 }
 
 process_with_custom_handler() {
-  local service="$1" display_name="$2" handler_func="${PRIMARY_SERVICES_CUSTOM_HANDLERS[$service]}"
-  local ipv4_result="" ipv6_result=""
+  local service="$1" display_name="$2" handler_func="${PRIMARY_SERVICES_CUSTOM_HANDLERS[$service]}" ipv4_result="" ipv6_result=""
   if can_use_ipv4; then ipv4_result=$("$handler_func" 4 4); fi
   if can_use_ipv6; then
     local transport=6
@@ -1491,8 +1353,7 @@ process_custom_service() {
 }
 
 run_service_group() {
-  local group="$1" services_string="${SERVICE_GROUPS[$group]}"
-  local is_custom=false is_cdn=false services_array service_name
+  local group="$1" services_string="${SERVICE_GROUPS[$group]}" is_custom=false is_cdn=false services_array service_name
   read -ra services_array <<<"$services_string"
   for service_name in "${services_array[@]}"; do
     if printf "%s\n" "${EXCLUDED_SERVICES[@]}" | grep_wrapper -Fxq "$service_name"; then continue; fi
@@ -1739,70 +1600,54 @@ lookup_disney_plus_access() {
   print_value_or_colored "$is_available" "$color_name"
 }
 
-lookup_apple() {
-  local ip_version="$1"
-  curl_wrapper GET "https://gspe1-ssl.ls.apple.com/pep/gcc" --ip-version "$ip_version"
-}
+lookup_apple() { curl_wrapper GET "https://gspe1-ssl.ls.apple.com/pep/gcc" --ip-version "$1"; }
 
 lookup_steam() {
-  local ip_version="$1" response
-  response=$(curl_wrapper HEAD "https://store.steampowered.com" --ip-version "$ip_version")
+  local response=$(curl_wrapper HEAD "https://store.steampowered.com" --ip-version "$1")
   grep_wrapper --perl 'steamCountry=\K[^%;]*' <<<"$response"
 }
 
 lookup_tiktok() {
-  local ip_version="$1" response
-  response=$(curl_wrapper GET "https://www.tiktok.com/api/v1/web-cookie-privacy/config?appId=1988" --ip-version "$ip_version")
+  local response=$(curl_wrapper GET "https://www.tiktok.com/api/v1/web-cookie-privacy/config?appId=1988" --ip-version "$1")
   process_json "$response" ".body.appProps.region"
 }
 
 lookup_cloudflare_cdn() {
-  local ip_version="$1" response iata location
-  response=$(curl_wrapper GET "https://speed.cloudflare.com/meta" \
-    --header "Referer: https://speed.cloudflare.com" \
-    --ip-version "$ip_version")
-  iata=$(process_json "$response" ".colo.iata")
-  location=$(get_iata_location "$iata")
-  echo "$location ($iata)"
+  local response=$(curl_wrapper GET "https://speed.cloudflare.com/meta" --header "Referer: https://speed.cloudflare.com" --ip-version "$1")
+  local iata=$(process_json "$response" ".colo.iata")
+  echo "$(get_iata_location "$iata") ($iata)"
 }
 
 lookup_youtube_cdn() {
-  local ip_version="$1" response iata location
-  response=$(curl_wrapper GET "https://redirector.googlevideo.com/report_mapping?di=no" --ip-version "$ip_version")
-  iata=$(echo "$response" | awk '{print $3}' | cut -f2 -d'-' | cut -c1-3)
+  local response=$(curl_wrapper GET "https://redirector.googlevideo.com/report_mapping?di=no" --ip-version "$1")
+  local iata=$(echo "$response" | awk '{print $3}' | cut -f2 -d'-' | cut -c1-3)
   iata=${iata^^}
   if [[ -z "$iata" ]]; then echo ""; return; fi
-  location=$(get_iata_location "$iata")
-  echo "$location ($iata)"
+  echo "$(get_iata_location "$iata") ($iata)"
 }
 
 lookup_netflix_cdn() {
-  local ip_version="$1" response
-  response=$(curl_wrapper GET "https://api.fast.com/netflix/speedtest/v2?https=true&token=$NETFLIX_API_KEY&urlCount=1" --ip-version "$ip_version")
+  local response=$(curl_wrapper GET "https://api.fast.com/netflix/speedtest/v2?https=true&token=$NETFLIX_API_KEY&urlCount=1" --ip-version "$1")
   if is_valid_json "$response"; then process_json "$response" ".targets[0].location.country"; else echo ""; fi
 }
 
 lookup_ookla_speedtest() {
-  local ip_version="$1" response
-  response=$(curl_wrapper GET "https://www.speedtest.net/api/js/config-sdk" --ip-version "$ip_version")
+  local response=$(curl_wrapper GET "https://www.speedtest.net/api/js/config-sdk" --ip-version "$1")
   process_json "$response" ".location.countryCode"
 }
 
 lookup_jetbrains() {
-  local ip_version="$1" response
-  response=$(curl_wrapper GET "https://data.services.jetbrains.com/geo" --ip-version "$ip_version")
+  local response=$(curl_wrapper GET "https://data.services.jetbrains.com/geo" --ip-version "$1")
   process_json "$response" ".code"
 }
 
 lookup_playstation() {
-  local ip_version="$1" response
-  response=$(curl_wrapper HEAD "https://www.playstation.com" --ip-version "$ip_version")
+  local response=$(curl_wrapper HEAD "https://www.playstation.com" --ip-version "$1")
   grep_wrapper --perl 'country=\K[^;]*' <<<"$response" | head -n1
 }
 
 lookup_microsoft() {
-  local ip_version="$1" response
-  response=$(curl_wrapper GET "https://login.live.com" --ip-version "$ip_version")
+  local response=$(curl_wrapper GET "https://login.live.com" --ip-version "$1")
   grep_wrapper --perl '"sRequestCountry":"\K[^"]*' <<<"$response"
 }
 
@@ -1830,7 +1675,7 @@ main() {
 }
 
 main "$@"
-IPREGION_EOF
+EOF_IPREGION
 
     chmod +x /usr/local/bin/ipregion
     /usr/local/bin/ipregion
