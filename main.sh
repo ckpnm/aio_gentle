@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export SCRIPT_VERSION="1.02"
+export SCRIPT_VERSION="1.13"
 export GITHUB_URL="https://github.com/ckpnm/aio_gentle"
 export UPDATE_NEEDED=0
 
@@ -72,7 +72,7 @@ draw_header() {
     local p_l=$(printf "%${pad_left}s" "")
     local p_r=$(printf "%${pad_right}s" "")
 
-    local sub_text="by •skrım— & Zover1337"
+    local sub_text="utility"
     local sub_len=${#sub_text}
     local sub_pad_left=$(( pad_left + title_len - sub_len ))
     local sub_pad_right=$(( total_width - sub_pad_left - sub_len ))
@@ -378,7 +378,6 @@ step_remnanode_setup() {
         mkdir -p /var/log/xray
         chmod 777 /var/log/xray
 
-        # Переписано на echo для иммунитета к форматированию отступов
         echo "services:" > /opt/remnanode/docker-compose.yml
         echo "  remnanode:" >> /opt/remnanode/docker-compose.yml
         echo "    container_name: remnanode" >> /opt/remnanode/docker-compose.yml
@@ -1264,8 +1263,10 @@ curl_wrapper() {
 }
 
 service_build_request() {
-  local service="$1" ip="$2" ip_version="$3" cfg="${PRIMARY_SERVICES[$service]}"
+  local service="$1" ip="$2" ip_version="$3"
+  local cfg="${PRIMARY_SERVICES[$service]}"
   local display_name domain url_template url headers_str response_format
+  
   IFS='|' read -r display_name domain url_template response_format <<<"$cfg"
   if [[ -z "$display_name" ]]; then display_name="$service"; fi
   url="https://$domain${url_template//\{ip\}/$ip}"
@@ -1276,15 +1277,18 @@ service_build_request() {
 probe_service() {
   local service="$1" ip_version="$2" ip="$3"
   local built display_name url response_format headers_line request_params response
+  
   mapfile -t built < <(service_build_request "$service" "$ip" "$ip_version")
   display_name="${built[0]}"
   url="${built[1]}"
   response_format="${built[2]}"
   headers_line="${built[3]}"
+  
   if [[ -n "$headers_line" ]]; then
     IFS='||' read -ra hs <<<"$headers_line"
     for h in "${hs[@]}"; do if [[ -n "$h" ]]; then request_params+=(--header "$h"); fi; done
   fi
+  
   if [[ "$ip_version" == "6" ]] && is_ipv6_over_ipv4_service "$service"; then ip_version="4"; fi
   response=$(curl_wrapper GET "$url" "${request_params[@]}" --ip-version "$ip_version")
   process_response "$service" "$response" "$display_name" "$response_format"
@@ -1292,10 +1296,12 @@ probe_service() {
 
 process_response() {
   local service="$1" response="$2" display_name="$3" response_format="${4:-json}" jq_filter
+  
   if is_status_string "$response"; then echo "$response"; return; fi
   if [[ -z "$response" || "$response" == *"<html"* ]]; then echo "$STATUS_NA"; return; fi
   if [[ "$response_format" == "plain" ]]; then echo "$response" | tr -d '\r\n '; return; fi
   if ! is_valid_json "$response"; then return 1; fi
+  
   case "$service" in
     MAXMIND) jq_filter='.country.iso_code' ;; RIPE) jq_filter='.country' ;; IP2LOCATION_IO) jq_filter='.country_code' ;;
     IPINFO_IO) jq_filter='.data.country' ;; IPREGISTRY) jq_filter='.location.country.code' ;; IPAPI_CO) jq_filter='.country' ;;
@@ -1308,7 +1314,10 @@ process_response() {
 }
 
 process_with_custom_handler() {
-  local service="$1" display_name="$2" handler_func="${PRIMARY_SERVICES_CUSTOM_HANDLERS[$service]}" ipv4_result="" ipv6_result=""
+  local service="$1" display_name="$2"
+  local handler_func="${PRIMARY_SERVICES_CUSTOM_HANDLERS[$service]}" 
+  local ipv4_result="" ipv6_result=""
+  
   if can_use_ipv4; then ipv4_result=$("$handler_func" 4 4); fi
   if can_use_ipv6; then
     local transport=6
@@ -1326,11 +1335,14 @@ process_with_probe() {
 }
 
 process_service() {
-  local service="$1" custom="${2:-false}" service_config="${PRIMARY_SERVICES[$service]}"
+  local service="$1" custom="${2:-false}"
+  local service_config="${PRIMARY_SERVICES[$service]}"
   local display_name domain url_template response_format handler_func
+  
   IFS='|' read -r display_name domain url_template response_format <<<"$service_config"
   display_name="${display_name:-$service}"
   spinner_update "$display_name"
+  
   if [[ "$custom" == true ]]; then process_custom_service "$service"; return; fi
   if [[ -n "${PRIMARY_SERVICES_CUSTOM_HANDLERS[$service]}" ]]; then process_with_custom_handler "$service" "$display_name"; return; fi
   process_with_probe "$service" "$display_name"
@@ -1338,6 +1350,7 @@ process_service() {
 
 process_custom_service() {
   local service="$1" ipv4_result="" ipv6_result="" display_name handler_func group
+  
   if [[ -n "${CUSTOM_SERVICES[$service]}" ]]; then
     display_name="${CUSTOM_SERVICES[$service]}"; handler_func="${CUSTOM_SERVICES_HANDLERS[$service]}"; group="custom"
   elif [[ -n "${CDN_SERVICES[$service]}" ]]; then
@@ -1345,19 +1358,25 @@ process_custom_service() {
   else
     display_name="$service"; handler_func="${CUSTOM_SERVICES_HANDLERS[$service]}"; group="custom"
   fi
+  
   spinner_update "$display_name"
   if [[ -z "$handler_func" ]]; then return; fi
+  
   if can_use_ipv4; then ipv4_result=$("$handler_func" 4); fi
   if can_use_ipv6; then ipv6_result=$("$handler_func" 6); fi
   add_result "$group" "$display_name" "$ipv4_result" "$ipv6_result"
 }
 
 run_service_group() {
-  local group="$1" services_string="${SERVICE_GROUPS[$group]}" is_custom=false is_cdn=false services_array service_name
+  local group="$1"
+  local services_string="${SERVICE_GROUPS[$group]}" 
+  local is_custom=false is_cdn=false services_array service_name
+  
   read -ra services_array <<<"$services_string"
   for service_name in "${services_array[@]}"; do
     if printf "%s\n" "${EXCLUDED_SERVICES[@]}" | grep_wrapper -Fxq "$service_name"; then continue; fi
     case "$group" in custom) is_custom=true ;; cdn) is_cdn=true ;; esac
+    
     if [[ "$is_custom" == true ]]; then process_service "$service_name" true
     elif [[ "$is_cdn" == true ]]; then process_custom_service "$service_name"
     else process_service "$service_name"
