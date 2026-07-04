@@ -1750,7 +1750,7 @@ while true; do
         "Настройка ротации логов Xray")  step_logrotate_xray ;;
         "Установка Traffic Guard")       step_traffic_guard_setup ;;
         "Блокировка Leaseweb & HE (iptables)") step_block_asn ;;
-        "Блокировка по URL (nftables)")  step_block_custom_list ;;
+        "Auto IPTables (АНТИ ГРЧЦ)")  step_block_custom_list ;;
         "Установка Cloudflare WARP")     step_warp_setup ;;
         "Получить Reality ключи и инфо") step_show_reality ;;
         "IP Region Check")               step_ipregion ;;
