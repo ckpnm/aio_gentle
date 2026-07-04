@@ -366,7 +366,7 @@ step_caddy_selfsteal() {
 }
 
 step_remnanode_setup() {
-    draw_sub_header "Развертывание Remnanode"
+    draw_sub_header "Установка Remnanode"
     read -p "Введите SecretKey из вашей панели Remnawave: " SECRET_KEY
     if [[ -z "$SECRET_KEY" ]]; then
         echo -e "${C_ERR}Ошибка: Ключ отсутствует!${C_BASE}"
@@ -507,7 +507,7 @@ EOF_SRV
 }
 
 step_block_custom_list() {
-    draw_sub_header "Блокировка по URL (nftables)"
+    draw_sub_header "Auto IPTables (АНТИ ГРЧЦ)"
     _do_block_nft() {
         export DEBIAN_FRONTEND=noninteractive
         LIST_URL="https://raw.githubusercontent.com/Loorrr293/blocklist/main/blocklist.txt"
