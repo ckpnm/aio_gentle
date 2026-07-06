@@ -1,5 +1,256 @@
 #!/bin/bash
 
+# ==========================================
+# ПОДМЕНЮ СПИДТЕСТОВ
+# ==========================================
+step_speedtests_menu() {
+    local sub_options=(
+        "--- ВЫБЕРИТЕ ТИП ТЕСТА ---"
+        "Ookla Speedtest (Мировой)"
+        "iPerf3 Speedtest (РФ сервера)"
+        "Назад в главное меню"
+    )
+    
+    while true; do
+        render_menu "${sub_options[@]}"
+        local sub_choice=$MENU_CHOICE
+        local SUB_NEEDS_PAUSE=1
+        
+        clear
+        case "${sub_options[$sub_choice]}" in
+            "Ookla Speedtest (Мировой)") step_speedtest_ookla ;;
+            "iPerf3 Speedtest (РФ сервера)") step_speedtest_iperf3 ;;
+            "Назад в главное меню") return 0 ;;
+        esac
+        
+        if [ "$SUB_NEEDS_PAUSE" -eq 1 ]; then pause; fi
+    done
+}
+
+# ==========================================
+# OOKLA (Глобальный)
+# ==========================================
+step_speedtest_ookla() {
+    draw_sub_header "Speedtest (Ookla)"
+    
+    _do_install_speedtest() {
+        if ! command -v speedtest &> /dev/null; then
+            curl -sSL "https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-linux-x86_64.tgz" -o /tmp/speedtest.tgz
+            tar -zxf /tmp/speedtest.tgz -C /tmp
+            mv /tmp/speedtest /usr/local/bin/speedtest
+            chmod +x /usr/local/bin/speedtest
+            rm -f /tmp/speedtest.tgz /tmp/speedtest.*
+        fi
+    }
+    
+    run_task "Установка Ookla Speedtest CLI" "_do_install_speedtest"
+    
+    echo -e "\n${C_DIM}Запуск тестирования сети...${C_BASE}\n"
+    speedtest --accept-license --accept-gdpr
+    echo
+}
+
+# ==========================================
+# IPERF3 (РФ Сервера)
+# ==========================================
+step_speedtest_iperf3() {
+    draw_sub_header "iPerf3 Speedtest (РФ сервера)"
+
+    if ! command -v iperf3 &> /dev/null || ! command -v jq &> /dev/null; then
+        echo -e "  ${C_DIM}Установка зависимостей (iperf3, jq)...${C_BASE}"
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update -y >/dev/null 2>&1
+        apt-get install -y iperf3 jq >/dev/null 2>&1
+    fi
+
+    local IPERF_TIMEOUT=15
+    local IPERF_TEST_DURATION=10
+    local PARALLEL_STREAMS=8
+    local FALLBACK_STREAMS=8
+    local INTER_TEST_DELAY=1
+    local MAX_JSON_LENGTH=50
+    local IPERF_PORT_RANGE=(5201 5202 5203 5204 5205 5206 5207 5208 5209)
+    local RESULTS=()
+
+    declare -A SERVERS=(
+        ["Moscow"]="spd-rudp.hostkey.ru"
+        ["Saint Petersburg"]="st.spb.ertelecom.ru"
+        ["Nizhny Novgorod"]="st.nn.ertelecom.ru"
+        ["Chelyabinsk"]="st.chel.ertelecom.ru"
+        ["Tyumen"]="st.tmn.ertelecom.ru"
+    )
+
+    declare -A FALLBACK_SERVERS=(
+        ["Moscow"]="st.tver.ertelecom.ru"
+        ["Saint Petersburg"]="st.yar.ertelecom.ru"
+        ["Nizhny Novgorod"]="speed-nn.vtt.net"
+        ["Chelyabinsk"]="st.mgn.ertelecom.ru"
+        ["Tyumen"]="st.krsk.ertelecom.ru"
+    )
+
+    declare -A FALLBACK_CITIES=(
+        ["Moscow"]="Tver"
+        ["Saint Petersburg"]="Yaroslavl"
+        ["Nizhny Novgorod"]="Nizhny Novgorod"
+        ["Chelyabinsk"]="Magnitogorsk"
+        ["Tyumen"]="Krasnoyarsk"
+    )
+
+    local CITY_ORDER=("Moscow" "Saint Petersburg" "Nizhny Novgorod" "Chelyabinsk" "Tyumen")
+
+    _find_available_port() {
+        local host="$1"
+        for port in "${IPERF_PORT_RANGE[@]}"; do
+            local test_result
+            test_result=$(timeout "$IPERF_TIMEOUT" iperf3 -c "$host" -p "$port" -t 1 2>&1 || echo "")
+            if [[ "$test_result" == *"receiver"* && "$test_result" != *"error"* ]]; then
+                echo "$port"
+                return 0
+            fi
+        done
+        return 1
+    }
+
+    _test_iperf_server() {
+        local host="$1"
+        local port="$2"
+        local streams="$3"
+        local result
+        result=$(timeout "$IPERF_TIMEOUT" iperf3 -c "$host" -p "$port" -P "$streams" -t "$IPERF_TEST_DURATION" -J 2>/dev/null || echo "")
+        
+        if [[ -n "$result" && "$result" == *'"receiver"'* && "${#result}" -gt "$MAX_JSON_LENGTH" ]]; then
+            echo "$result"
+            return 0
+        fi
+        return 1
+    }
+
+    _parse_speed() {
+        local json="$1"
+        local direction="$2"
+        if [[ "$direction" == "sender" ]]; then
+            echo "$json" | jq -r ".end.sum_sent.bits_per_second // 0" | awk '{printf "%.1f", $1/1000000}'
+        else
+            echo "$json" | jq -r ".end.sum_received.bits_per_second // 0" | awk '{printf "%.1f", $1/1000000}'
+        fi
+    }
+
+    _get_ping() {
+        local host="$1"
+        ping -c 5 -W 2 "$host" 2>/dev/null | grep -oP 'rtt min/avg/max/mdev = [0-9.]+/\K[0-9]+' || echo "N/A"
+    }
+
+    _process_test_result() {
+        local result="$1"
+        local city="$2"
+        local host="$3"
+        local port="$4"
+        local is_fallback="${5:-false}"
+        
+        local download upload ping_result
+        download=$(_parse_speed "$result" "receiver")
+        upload=$(_parse_speed "$result" "sender")
+        ping_result=$(_get_ping "$host")
+        
+        if [[ "$download" != "0.0" ]] || [[ "$upload" != "0.0" ]]; then
+            local display_city="$city"
+            [[ "$is_fallback" == "true" ]] && display_city="$city (F)"
+            
+            RESULTS+=("$(printf "  %-18s %-15s %-15s %-10s" "$display_city" "${download} Mbps" "${upload} Mbps" "${ping_result} ms")")
+            return 0
+        fi
+        return 1
+    }
+
+    _start_iperf_spinner() {
+        local msg="$1"
+        (
+            local chars=("⠇" "⠏" "⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧")
+            local i=0
+            while true; do
+                printf "\r  \e[1;36m%s\e[0m \e[97m%s\e[0m" "${chars[$i]}" "$msg"
+                i=$(( (i + 1) % ${#chars[@]} ))
+                sleep 0.15
+            done
+        ) &
+        SPINNER_PID=$!
+    }
+
+    _stop_iperf_spinner() {
+        [[ -n "${SPINNER_PID:-}" ]] && kill "$SPINNER_PID" 2>/dev/null
+        printf "\r\033[K"
+    }
+
+    _test_server() {
+        local city="$1"
+        local host="$2"
+        local fallback_host="$3"
+        local fallback_city="${FALLBACK_CITIES[$city]}"
+        
+        _start_iperf_spinner "Тестирование: $city ($host)..."
+        
+        local port result
+        if port=$(_find_available_port "$host"); then
+            if result=$(_test_iperf_server "$host" "$port" "$PARALLEL_STREAMS"); then
+                if _process_test_result "$result" "$city" "$host" "$port"; then
+                    _stop_iperf_spinner
+                    echo -e "  ${C_OK}✓${C_BASE} ${C_WHITE}$city ($host) - Успешно${C_BASE}"
+                    return 0
+                fi
+            fi
+            if result=$(_test_iperf_server "$host" "$port" "$FALLBACK_STREAMS"); then
+                if _process_test_result "$result" "$city" "$host" "$port"; then
+                    _stop_iperf_spinner
+                    echo -e "  ${C_OK}✓${C_BASE} ${C_WHITE}$city ($host) - Успешно${C_BASE}"
+                    return 0
+                fi
+            fi
+        fi
+        
+        if fallback_port=$(_find_available_port "$fallback_host"); then
+            if result=$(_test_iperf_server "$fallback_host" "$fallback_port" "$PARALLEL_STREAMS"); then
+                if _process_test_result "$result" "$fallback_city" "$fallback_host" "$fallback_port" "true"; then
+                    _stop_iperf_spinner
+                    echo -e "  ${C_OK}✓${C_BASE} ${C_WHITE}$fallback_city ($fallback_host) [Резерв] - Успешно${C_BASE}"
+                    return 0
+                fi
+            fi
+            if result=$(_test_iperf_server "$fallback_host" "$fallback_port" "$FALLBACK_STREAMS"); then
+                if _process_test_result "$result" "$fallback_city" "$fallback_host" "$fallback_port" "true"; then
+                    _stop_iperf_spinner
+                    echo -e "  ${C_OK}✓${C_BASE} ${C_WHITE}$fallback_city ($fallback_host) [Резерв] - Успешно${C_BASE}"
+                    return 0
+                fi
+            fi
+        fi
+        
+        _stop_iperf_spinner
+        echo -e "  ${C_ERR}✗${C_BASE} ${C_DIM}$city ($host) - Недоступен${C_BASE}"
+        RESULTS+=("$(printf "  %-18s %-15s %-15s %-10s" "$city" "---" "---" "N/A")")
+        return 1
+    }
+
+    echo -e "  ${C_DIM}Запуск тестирования каналов... Это займет около минуты.${C_BASE}\n"
+    
+    for city in "${CITY_ORDER[@]}"; do
+        _test_server "$city" "${SERVERS[$city]}" "${FALLBACK_SERVERS[$city]}"
+        [[ ${#CITY_ORDER[@]} -gt 1 ]] && sleep "$INTER_TEST_DELAY"
+    done
+    
+    echo -e "\n  ${C_ACCENT}${C_BOLD}РЕЗУЛЬТАТЫ IPERF3:${C_BASE}"
+    echo -e "  ${C_DIM}Источник серверов: github.com/itdoginfo/russian-iperf3-servers${C_BASE}\n"
+    printf "  ${C_WHITE}%-18s %-15s %-15s %-10s${C_BASE}\n" "Локация" "Скачивание" "Отдача" "Пинг"
+    printf "  ${C_DIM}%-18s %-15s %-15s %-10s${C_BASE}\n" "-------" "----------" "------" "----"
+    
+    for res in "${RESULTS[@]}"; do
+        echo -e "$res"
+    done
+    echo
+}
+
+# ==========================================
+# ИНФО И IP REGION
+# ==========================================
 step_show_reality() {
     draw_sub_header "Ключи Reality и Инфо"
     if ! command -v docker &> /dev/null || ! docker ps | grep -q remnanode; then
@@ -37,26 +288,6 @@ step_show_reality() {
     echo -e "  NODE_PORT (в панели): ${C_ACCENT}2222${C_BASE}"
     echo -e "  Директория логов:     ${C_DIM}/var/log/xray${C_BASE}"
     echo -e "  Конфигурация:         ${C_DIM}/opt/remnanode/docker-compose.yml${C_BASE}"
-}
-
-step_speedtest() {
-    draw_sub_header "Speedtest (Ookla)"
-    
-    _do_install_speedtest() {
-        if ! command -v speedtest &> /dev/null; then
-            curl -sSL "https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-linux-x86_64.tgz" -o /tmp/speedtest.tgz
-            tar -zxf /tmp/speedtest.tgz -C /tmp
-            mv /tmp/speedtest /usr/local/bin/speedtest
-            chmod +x /usr/local/bin/speedtest
-            rm -f /tmp/speedtest.tgz /tmp/speedtest.*
-        fi
-    }
-    
-    run_task "Установка Ookla Speedtest CLI" "_do_install_speedtest"
-    
-    echo -e "\n${C_DIM}Запуск тестирования сети...${C_BASE}\n"
-    speedtest --accept-license --accept-gdpr
-    echo
 }
 
 step_ipregion() {
