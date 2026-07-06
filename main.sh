@@ -58,7 +58,7 @@ draw_header() {
     [[ "$UPDATE_NEEDED" -eq 1 ]] && ver_color="$c_red"
 
     local total_width=37
-    local title_text="A I O - GENTLE"
+    local title_text="A I O - GENTLE "
     local ver_text="v${SCRIPT_VERSION}"
     local title_len=$(( ${#title_text} + ${#ver_text} ))
     local pad_left=$(( (total_width - title_len) / 2 ))
