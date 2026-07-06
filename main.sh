@@ -63,7 +63,7 @@ draw_header() {
 
     local total_width=37
    
-    local title_text="A I O - GENTLE "
+    local title_text="Λ I Ø - G E N T Ł E "
     local ver_text="v${SCRIPT_VERSION}"
     local title_len=$(( ${#title_text} + ${#ver_text} ))
     local pad_left=$(( (total_width - title_len) / 2 ))
@@ -72,7 +72,7 @@ draw_header() {
     local p_l=$(printf "%${pad_left}s" "")
     local p_r=$(printf "%${pad_right}s" "")
 
-    local sub_text="utility"
+    local sub_text="by •skrım—"
     local sub_len=${#sub_text}
     local sub_pad_left=$(( pad_left + title_len - sub_len ))
     local sub_pad_right=$(( total_width - sub_pad_left - sub_len ))
@@ -263,7 +263,7 @@ step_base_deps() {
     draw_sub_header "Базовая подготовка"
     _do_base_deps() {
         apt-get update -y
-        apt-get install -y curl ufw logrotate sudo git dnsutils unzip
+        apt-get install -y curl ufw logrotate sudo git dnsutils unzip psmisc
     }
     run_task "Обновление кэша пакетов и установка зависимостей" "_do_base_deps"
 }
@@ -571,13 +571,25 @@ step_node_nginx() {
         mkdir -p /opt/remnanode /var/www/html
         curl -sSL "https://raw.githubusercontent.com/legiz-ru/Orion/refs/heads/main/index.html" -o /var/www/html/index.html
 
+        # Жестко освобождаем 80 порт от зависших докер-контейнеров или локального веб-сервера
+        docker stop caddy-remnawave remnawave-nginx &>/dev/null || true
+        systemctl stop nginx &>/dev/null || true
+        fuser -k 80/tcp &>/dev/null || true
+
         apt-get install -y certbot > /dev/null 2>&1
         ufw allow 80/tcp > /dev/null 2>&1
-        certbot certonly --standalone -d "$DOMAIN" --email "$CERT_EMAIL" --agree-tos --non-interactive > /dev/null 2>&1
+        
+        # Вывод certbot пишем в общий лог, чтобы не гадать, почему сертификат не создался
+        if ! certbot certonly --standalone -d "$DOMAIN" --email "$CERT_EMAIL" --agree-tos --non-interactive; then
+            echo -e "\n[ОШИБКА] Ошибка certbot при получении сертификата. Подробности выше в логе." >&2
+            ufw delete allow 80/tcp > /dev/null 2>&1
+            return 1
+        fi
+        
         ufw delete allow 80/tcp > /dev/null 2>&1
 
         if [ ! -d "/etc/letsencrypt/live/$DOMAIN" ]; then
-            echo "Ошибка генерации сертификата. Проверьте DNS записи домена." >&2
+            echo "Сертификат не был сохранен в нужную директорию." >&2
             return 1
         fi
 
@@ -1026,10 +1038,19 @@ step_show_reality() {
         echo -e "Вызовите вручную: ${C_BOLD}docker exec -it remnanode xray x25519${C_BASE}"
     fi
     
+    # Пытаемся достать домен из конфигурации Caddy или Nginx (если они стоят)
+    local SNI_DOMAIN="<ВАШ_ДОМЕН>"
+    if [ -f "/opt/remnanode/Caddyfile" ]; then
+        SNI_DOMAIN=$(grep -oP 'SELF_STEAL_DOMAIN=\K.*' /opt/remnanode/docker-compose.yml 2>/dev/null)
+    elif [ -f "/opt/remnanode/nginx.conf" ]; then
+        SNI_DOMAIN=$(grep -oP 'server_name \K[^;]+' /opt/remnanode/nginx.conf | head -n 1 2>/dev/null)
+    fi
+
     echo -e "\n${C_WHITE}Настройки Fallback (для SelfSteal):${C_BASE}"
     echo -e "  dest: ${C_ACCENT}/dev/shm/nginx.sock${C_BASE}"
     echo -e "  show: ${C_ACCENT}false${C_BASE}"
     echo -e "  xver: ${C_ACCENT}1${C_BASE}"
+    echo -e "  SNI:  ${C_ACCENT}${SNI_DOMAIN}${C_BASE}"
     
     echo -e "\n${C_WHITE}Инфо по подключению ноды:${C_BASE}"
     echo -e "  NODE_PORT (в панели): ${C_ACCENT}2222${C_BASE}"
