@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export SCRIPT_VERSION="1.05"
+export SCRIPT_VERSION="1.06"
 export GITHUB_URL="https://github.com/ckpnm/aio_gentle"
 export REPO_RAW_URL="https://raw.githubusercontent.com/ckpnm/aio_gentle/main"
 
@@ -45,10 +45,14 @@ draw_header() {
     local c_dark="\e[38;5;24m"    
     local c_white="\e[38;5;255m"  
     local c_gray="\e[38;5;244m"   
+    local c_red="\e[38;5;196m"    
     local c_reset="\e[0m"         
 
+    local ver_color="$c_white"
+    [[ "$UPDATE_NEEDED" -eq 1 ]] && ver_color="$c_red"
+
     local total_width=37
-    local title_text="A I O - GENTLE "
+    local title_text="A I O - GEMTLE "
     local ver_text="v${SCRIPT_VERSION}"
     local title_len=$(( ${#title_text} + ${#ver_text} ))
     local pad_left=$(( (total_width - title_len) / 2 ))
@@ -152,7 +156,6 @@ render_menu() {
     done
 }
 
-# Безопасный запуск фоновых задач
 run_task() {
     local task_name=$1
     local cmd_func=$2
@@ -193,7 +196,6 @@ load_module() {
     local local_file="$MODULES_DIR/$mod_name"
     local remote_url="$REPO_RAW_URL/modules/$mod_name"
 
-    # Скачиваем, если файла нет или если передали флаг FORCE_UPDATE=1
     if [ ! -f "$local_file" ] || [ "$FORCE_UPDATE" = "1" ]; then
         curl -sSL --connect-timeout 5 --max-time 15 "$remote_url" -o "$local_file"
     fi
@@ -206,7 +208,6 @@ load_module() {
     fi
 }
 
-# Синхронизация базовых модулей при старте
 _sync_core_modules() {
     local core_modules=("base.sh" "remnanode.sh" "security.sh" "diagnostics.sh" "system.sh")
     for mod in "${core_modules[@]}"; do
@@ -215,12 +216,10 @@ _sync_core_modules() {
 }
 
 echo -e "${C_DIM}Синхронизация модулей ΛIO...${C_BASE}"
-# Если хотим всегда качать свежие версии при старте: export FORCE_UPDATE="1"
 export FORCE_UPDATE="1"
 _sync_core_modules
 clear
 
-# Установка алиаса
 if [ ! -f /usr/local/bin/aio_gentle ]; then
     ln -sf "$AIO_DIR/main.sh" /usr/local/bin/aio_gentle 2>/dev/null
 fi
@@ -235,20 +234,20 @@ options=(
     "Swap (Подкачка памяти)"
     "Изменение SSH порта"
     "Настройка брандмауэра UFW"
-    "--- РАЗВЕРТЫВАНИЕ REMNAWAVE ---"
+    "--- УСТАНОВКА REMNAWAVE ---"
     "Установка Docker & Compose"
     "Установка Remnanode"
     "Установка фейк-сайта (SelfSteal)"
     "Настройка ротации логов Xray"
     "--- ЗАЩИТА И ДОПОЛНЕНИЯ ---"
     "Установка Traffic Guard"
-    "Блокировка Leaseweb & HE (iptables)"
-    "Блокировка по URL (nftables)"
+    "Блокировка Leaseweb & HE (ANTIBOTNET)"
+    "Auto IPtables (АНТИ ГРЧЦ)"
     "Установка Cloudflare WARP"
     "--- ДИАГНОСТИКА ---"
     "Получить Reality ключи и инфо"
     "IP Region Check"
-    "Speedtest (Ookla)"
+    "Спидтесты (Ookla & iPerf3)"
     "--- СКРИПТ ---"
     "Информация"
     "Обновить утилиту"
@@ -275,13 +274,13 @@ while true; do
         "Настройка ротации логов Xray")  step_logrotate_xray ;;
         
         "Установка Traffic Guard")       step_traffic_guard_setup ;;
-        "Блокировка Leaseweb & HE (iptables)") step_block_asn ;;
-        "Блокировка по URL (nftables)")  step_block_custom_list ;;
+        "Блокировка Leaseweb & HE (ANTIBOTNET)") step_block_asn ;;
+        "Auto IPtables (АНТИ ГРЧЦ)")  step_block_custom_list ;;
         "Установка Cloudflare WARP")     step_warp_setup ;;
         
         "Получить Reality ключи и инфо") step_show_reality ;;
         "IP Region Check")               step_ipregion ;;
-        "Speedtest (Ookla)")             step_speedtest ;;
+        "Спидтесты (Ookla & iPerf3)")    step_speedtests_menu; NEEDS_PAUSE=0 ;;
         
         "Информация")                    step_info ;;
         "Обновить утилиту")              step_update_script ;;
