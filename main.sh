@@ -15,7 +15,7 @@ fi
 
 mkdir -p "$MODULES_DIR"
 echo -e "\n========================================" >> "$LOG_FILE"
-echo "Запуск A I O GENTLE UTILITY: $(date '+%Y-%m-%d %H:%M:%S')" >> "$LOG_FILE"
+echo "Запуск A I O - GENTLE UTILITY: $(date '+%Y-%m-%d %H:%M:%S')" >> "$LOG_FILE"
 echo "========================================" >> "$LOG_FILE"
 
 export C_BASE='\e[0m'
@@ -58,7 +58,7 @@ draw_header() {
     [[ "$UPDATE_NEEDED" -eq 1 ]] && ver_color="$c_red"
 
     local total_width=37
-    local title_text="A I O - GENTLE "
+    local title_text="A I O - GENTLE"
     local ver_text="v${SCRIPT_VERSION}"
     local title_len=$(( ${#title_text} + ${#ver_text} ))
     local pad_left=$(( (total_width - title_len) / 2 ))
@@ -104,11 +104,12 @@ _draw_progress() {
     local pid=$1
     local width=15; local p=0; local delay=0.1; local ticks=0
     while kill -0 "$pid" 2>/dev/null; do
-        local bar="["
+        local bar="("
         for ((i=0; i<width; i++)); do
-            if [ $i -lt $p ]; then bar+="■"; else bar+="·"; fi
+            # Заменили квадраты на кружки
+            if [ $i -lt $p ]; then bar+="●"; else bar+="○"; fi
         done
-        bar+="]"
+        bar+=")"
         printf "\e[u%b%s%b" "$C_ACCENT" "$bar" "$C_BASE"
         sleep $delay
         ((ticks++))
@@ -241,15 +242,15 @@ options=(
     "Настройка ротации логов Xray"
     "--- ЗАЩИТА И ДОПОЛНЕНИЯ ---"
     "Установка Traffic Guard"
-    "Блокировка Leaseweb & HE (АНТИ-БОТНЕТ)"
-    "Auto IPtables (АНТИ ГРЧЦ)"
+    "Блокировка Leaseweb & HE (Анти БОТНЕТ)"
+    "Блокировка ГРЧЦ (Auto IPTables)"
     "Управление Cloudflare WARP"
     "--- ДИАГНОСТИКА ---"
     "Получить Reality ключи и инфо"
     "IP Region Check"
     "Спидтесты (Ookla & iPerf3)"
     "CensorCheck (ТСПУ / DPI)"
-    "IP Quality Check (Репутация IP)"
+    "IP Репутация"
     "--- СКРИПТ ---"
     "Информация"
     "Обновить утилиту"
@@ -278,15 +279,15 @@ while true; do
         "Настройка ротации логов Xray")  step_logrotate_xray ;;
         
         "Установка Traffic Guard")       step_traffic_guard_setup ;;
-        "Блокировка Leaseweb & HE (АНТИ-БОТНЕТ)") step_block_asn ;;
-        "Auto IPtables (АНТИ ГРЧЦ)")  step_block_custom_list ;;
+        "Блокировка Leaseweb & HE (Анти БОТНЕТ)") step_block_asn ;;
+        "Блокировка ГРЧЦ (Auto IPTables)")  step_block_custom_list ;;
         "Управление Cloudflare WARP")    step_warp_menu; NEEDS_PAUSE=0 ;;
         
         "Получить Reality ключи и инфо") step_show_reality ;;
         "IP Region Check")               step_ipregion ;;
         "Спидтесты (Ookla & iPerf3)")    step_speedtests_menu; NEEDS_PAUSE=0 ;;
         "CensorCheck (ТСПУ / DPI)")      step_censorcheck ;;
-        "IP Quality Check (Репутация IP)")  step_ipquality ;;
+        "IP Репутация")  step_ipquality ;;
         
         "Информация")                    step_info ;;
         "Обновить утилиту")              step_update_script ;;
