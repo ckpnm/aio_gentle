@@ -4,7 +4,6 @@ export SCRIPT_VERSION="1.06"
 export GITHUB_URL="https://github.com/ckpnm/aio_gentle"
 export REPO_RAW_URL="https://raw.githubusercontent.com/ckpnm/aio_gentle/main"
 
-# Рабочая директория утилиты
 export AIO_DIR="/usr/local/aio_gentle"
 export MODULES_DIR="$AIO_DIR/modules"
 export LOG_FILE="/var/log/aio_setup.log"
@@ -16,12 +15,9 @@ fi
 
 mkdir -p "$MODULES_DIR"
 echo -e "\n========================================" >> "$LOG_FILE"
-echo "Запуск ΛIO VPN GENTLE UTILITY: $(date '+%Y-%m-%d %H:%M:%S')" >> "$LOG_FILE"
+echo "Запуск A I O GENTLE UTILITY: $(date '+%Y-%m-%d %H:%M:%S')" >> "$LOG_FILE"
 echo "========================================" >> "$LOG_FILE"
 
-# ==========================================
-# ВИЗУАЛ И ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
-# ==========================================
 export C_BASE='\e[0m'
 export C_ACCENT='\e[1;36m' 
 export C_DIM='\e[90m'      
@@ -40,6 +36,16 @@ pause() {
     read -rsn1
 }
 
+check_updates() {
+    local remote_version
+    remote_version=$(curl -s --max-time 3 "https://raw.githubusercontent.com/ckpnm/aio_gentle/main/main.sh?t=$RANDOM" | grep -E '^export SCRIPT_VERSION=' | awk -F'=' '{print $2}' | sed "s/['\"]//g" | tr -d '\r')
+    
+    if [[ -n "$remote_version" && "$remote_version" != "$SCRIPT_VERSION" ]]; then
+        export UPDATE_NEEDED=1
+        export REMOTE_VERSION="$remote_version"
+    fi
+}
+
 draw_header() {
     local c_light="\e[38;5;51m"   
     local c_dark="\e[38;5;24m"    
@@ -52,7 +58,7 @@ draw_header() {
     [[ "$UPDATE_NEEDED" -eq 1 ]] && ver_color="$c_red"
 
     local total_width=37
-    local title_text="A I O - GEMTLE "
+    local title_text="A I O - GENTLE "
     local ver_text="v${SCRIPT_VERSION}"
     local title_len=$(( ${#title_text} + ${#ver_text} ))
     local pad_left=$(( (total_width - title_len) / 2 ))
@@ -188,9 +194,6 @@ run_task() {
     fi
 }
 
-# ==========================================
-# ЗАГРУЗЧИК МОДУЛЕЙ
-# ==========================================
 load_module() {
     local mod_name="$1"
     local local_file="$MODULES_DIR/$mod_name"
@@ -224,9 +227,6 @@ if [ ! -f /usr/local/bin/aio_gentle ]; then
     ln -sf "$AIO_DIR/main.sh" /usr/local/bin/aio_gentle 2>/dev/null
 fi
 
-# ==========================================
-# ГЛАВНЫЙ ЦИКЛ
-# ==========================================
 options=(
     "--- БАЗОВАЯ ПОДГОТОВКА ---"
     "Базовые утилиты и зависимости"
@@ -241,19 +241,23 @@ options=(
     "Настройка ротации логов Xray"
     "--- ЗАЩИТА И ДОПОЛНЕНИЯ ---"
     "Установка Traffic Guard"
-    "Блокировка Leaseweb & HE (ANTIBOTNET)"
+    "Блокировка Leaseweb & HE (АНТИ-БОТНЕТ)"
     "Auto IPtables (АНТИ ГРЧЦ)"
-    "Установка Cloudflare WARP"
+    "Управление Cloudflare WARP"
     "--- ДИАГНОСТИКА ---"
     "Получить Reality ключи и инфо"
     "IP Region Check"
     "Спидтесты (Ookla & iPerf3)"
+    "CensorCheck (ТСПУ / DPI)"
+    "IP Quality Check (Репутация IP)"
     "--- СКРИПТ ---"
     "Информация"
     "Обновить утилиту"
     "Удалить утилиту"
     "Выход"
 )
+
+check_updates
 
 while true; do
     render_menu "${options[@]}"
@@ -274,13 +278,15 @@ while true; do
         "Настройка ротации логов Xray")  step_logrotate_xray ;;
         
         "Установка Traffic Guard")       step_traffic_guard_setup ;;
-        "Блокировка Leaseweb & HE (ANTIBOTNET)") step_block_asn ;;
+        "Блокировка Leaseweb & HE (АНТИ-БОТНЕТ)") step_block_asn ;;
         "Auto IPtables (АНТИ ГРЧЦ)")  step_block_custom_list ;;
-        "Установка Cloudflare WARP")     step_warp_setup ;;
+        "Управление Cloudflare WARP")    step_warp_menu; NEEDS_PAUSE=0 ;;
         
         "Получить Reality ключи и инфо") step_show_reality ;;
         "IP Region Check")               step_ipregion ;;
         "Спидтесты (Ookla & iPerf3)")    step_speedtests_menu; NEEDS_PAUSE=0 ;;
+        "CensorCheck (ТСПУ / DPI)")      step_censorcheck ;;
+        "IP Quality Check (Репутация IP)")  step_ipquality ;;
         
         "Информация")                    step_info ;;
         "Обновить утилиту")              step_update_script ;;
