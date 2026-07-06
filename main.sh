@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export SCRIPT_VERSION="1.05"
+export SCRIPT_VERSION="1.19"
 export GITHUB_URL="https://github.com/ckpnm/aio_gentle"
 export UPDATE_NEEDED=0
 
@@ -269,6 +269,27 @@ step_base_deps() {
     run_task "Обновление кэша пакетов и установка зависимостей" "_do_base_deps"
 }
 
+step_swap() {
+    draw_sub_header "Создание Swap (Подкачка)"
+    read -p "Укажите размер Swap в ГБ (по умолчанию 2): " SWAP_SIZE
+    SWAP_SIZE=${SWAP_SIZE:-2}
+
+    _do_swap() {
+        if [ -f /swapfile ]; then
+            swapoff /swapfile || true
+            rm -f /swapfile
+        fi
+        fallocate -l ${SWAP_SIZE}G /swapfile
+        chmod 600 /swapfile
+        mkswap /swapfile
+        swapon /swapfile
+        if ! grep -q '/swapfile' /etc/fstab; then
+            echo '/swapfile none swap sw 0 0' >> /etc/fstab
+        fi
+    }
+    run_task "Настройка файла подкачки на ${SWAP_SIZE}GB" "_do_swap"
+}
+
 step_bbr_ipv6() {
     draw_sub_header "Оптимизация сети (BBR)"
     _do_bbr_ipv6() {
@@ -367,6 +388,7 @@ step_caddy_selfsteal() {
     fi
 
     _do_selfsteal() {
+        if ! command -v docker &> /dev/null; then curl -fsSL https://get.docker.com | sh > /dev/null 2>&1; fi
         printf "%s\n1\n9443\ny\n" "$DOMAIN" | bash <(curl -Ls https://github.com/DigneZzZ/remnawave-scripts/raw/main/selfsteal.sh) @ install
     }
     run_task "Генерация маскировки и запуск Caddy Selfsteal" "_do_selfsteal"
@@ -410,6 +432,7 @@ step_remnanode_setup() {
     fi
 
     _do_remnanode() {
+        if ! command -v docker &> /dev/null; then curl -fsSL https://get.docker.com | sh > /dev/null 2>&1; fi
         mkdir -p /opt/remnanode
         mkdir -p /var/log/xray
         chmod 777 /var/log/xray
@@ -456,6 +479,7 @@ step_node_caddy() {
     if [[ -z "$SECRET_KEY" ]]; then echo -e "${C_ERR}Ключ не может быть пустым!${C_BASE}"; return 1; fi
 
     _do_node_caddy() {
+        if ! command -v docker &> /dev/null; then curl -fsSL https://get.docker.com | sh > /dev/null 2>&1; fi
         mkdir -p /opt/remnanode /var/www/html
         curl -sSL "https://raw.githubusercontent.com/legiz-ru/Orion/refs/heads/main/index.html" -o /var/www/html/index.html
 
@@ -569,6 +593,8 @@ step_node_nginx() {
     read -p "Введите Email для регистрации SSL сертификата Let's Encrypt: " CERT_EMAIL
 
     _do_node_nginx() {
+        if ! command -v docker &> /dev/null; then curl -fsSL https://get.docker.com | sh > /dev/null 2>&1; fi
+        
         mkdir -p /opt/remnanode /var/www/html
         curl -sSL "https://raw.githubusercontent.com/legiz-ru/Orion/refs/heads/main/index.html" -o /var/www/html/index.html
 
@@ -2128,6 +2154,7 @@ options=(
     "--- БАЗОВАЯ ПОДГОТОВКА ---"
     "Базовые утилиты и зависимости"
     "BBR & TCP (Отключение IPv6)"
+    "Swap (Подкачка памяти)"
     "Изменение SSH порта"
     "Настройка брандмауэра UFW"
     "Установка Fail2Ban"
@@ -2163,6 +2190,7 @@ while true; do
     case "${options[$choice]}" in
         "Базовые утилиты и зависимости") step_base_deps ;;
         "BBR & TCP (Отключение IPv6)")   step_bbr_ipv6 ;;
+        "Swap (Подкачка памяти)")        step_swap ;;
         "Изменение SSH порта")           step_ssh_port ;;
         "Настройка брандмауэра UFW")     step_ufw_setup ;;
         "Установка Fail2Ban")            step_fail2ban_setup ;;
