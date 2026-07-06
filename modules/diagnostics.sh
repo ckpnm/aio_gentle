@@ -756,7 +756,7 @@ EOF_CENSORCHECK
 # IP QUALITY CHECK (Репутация IP)
 # ==========================================
 step_ipquality() {
-    draw_sub_header "IP Quality Check (Репутация и Стриминги)"
+    draw_sub_header "IP Репутация"
     
     _do_ipq_deps() {
         export DEBIAN_FRONTEND=noninteractive
