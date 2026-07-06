@@ -104,12 +104,12 @@ _draw_progress() {
     local pid=$1
     local width=15; local p=0; local delay=0.1; local ticks=0
     while kill -0 "$pid" 2>/dev/null; do
-        local bar="("
+        local bar=" "
         for ((i=0; i<width; i++)); do
             # Заменили квадраты на кружки
             if [ $i -lt $p ]; then bar+="●"; else bar+="○"; fi
         done
-        bar+=")"
+        bar+=" "
         printf "\e[u%b%s%b" "$C_ACCENT" "$bar" "$C_BASE"
         sleep $delay
         ((ticks++))
