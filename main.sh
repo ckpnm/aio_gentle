@@ -262,8 +262,9 @@ step_info() {
 step_base_deps() {
     draw_sub_header "Базовая подготовка"
     _do_base_deps() {
+        export DEBIAN_FRONTEND=noninteractive
         apt-get update -y
-        apt-get install -y curl ufw logrotate sudo git dnsutils unzip psmisc
+        apt-get install -y curl ufw logrotate sudo git dnsutils unzip psmisc certbot
     }
     run_task "Обновление кэша пакетов и установка зависимостей" "_do_base_deps"
 }
@@ -576,7 +577,17 @@ step_node_nginx() {
         systemctl stop nginx &>/dev/null || true
         fuser -k 80/tcp &>/dev/null || true
 
-        apt-get install -y certbot > /dev/null 2>&1
+        export DEBIAN_FRONTEND=noninteractive
+        if ! command -v certbot &> /dev/null; then
+            apt-get update -y > /dev/null 2>&1
+            apt-get install -y certbot > /dev/null 2>&1
+        fi
+
+        if ! command -v certbot &> /dev/null; then
+            echo -e "\n[ОШИБКА] Не удалось установить certbot. Выполните 'apt update && apt install certbot -y' вручную." >&2
+            return 1
+        fi
+
         ufw allow 80/tcp > /dev/null 2>&1
         
         # Вывод certbot пишем в общий лог, чтобы не гадать, почему сертификат не создался
@@ -1043,14 +1054,16 @@ step_show_reality() {
     if [ -f "/opt/remnanode/Caddyfile" ]; then
         SNI_DOMAIN=$(grep -oP 'SELF_STEAL_DOMAIN=\K.*' /opt/remnanode/docker-compose.yml 2>/dev/null)
     elif [ -f "/opt/remnanode/nginx.conf" ]; then
-        SNI_DOMAIN=$(grep -oP 'server_name \K[^;]+' /opt/remnanode/nginx.conf | head -n 1 2>/dev/null)
+        SNI_DOMAIN=$(grep -oP 'server_name \K[^;]+' /opt/remnanode/nginx.conf | head -n 1 2>/dev/null | xargs)
     fi
 
     echo -e "\n${C_WHITE}Настройки Fallback (для SelfSteal):${C_BASE}"
     echo -e "  dest: ${C_ACCENT}/dev/shm/nginx.sock${C_BASE}"
     echo -e "  show: ${C_ACCENT}false${C_BASE}"
     echo -e "  xver: ${C_ACCENT}1${C_BASE}"
-    echo -e "  SNI:  ${C_ACCENT}${SNI_DOMAIN}${C_BASE}"
+    if [ "$SNI_DOMAIN" != "<ВАШ_ДОМЕН>" ]; then
+        echo -e "  SNI:  ${C_ACCENT}${SNI_DOMAIN}${C_BASE}"
+    fi
     
     echo -e "\n${C_WHITE}Инфо по подключению ноды:${C_BASE}"
     echo -e "  NODE_PORT (в панели): ${C_ACCENT}2222${C_BASE}"
@@ -2120,7 +2133,6 @@ options=(
     "Установка Fail2Ban"
     "--- РАЗВЕРТЫВАНИЕ REMNAWAVE ---"
     "Установка Docker & Compose"
-    "Caddy Selfsteal (Сертификаты)"
     "Установка Remnanode"
     "Установка фейк-сайта (SelfSteal)"
     "Настройка ротации логов Xray"
@@ -2155,7 +2167,6 @@ while true; do
         "Настройка брандмауэра UFW")     step_ufw_setup ;;
         "Установка Fail2Ban")            step_fail2ban_setup ;;
         "Установка Docker & Compose")    step_docker_setup ;;
-        "Caddy Selfsteal (Сертификаты)") step_caddy_selfsteal ;;
         "Установка Remnanode")           step_install_remnanode_menu; NEEDS_PAUSE=0 ;;
         "Установка фейк-сайта (SelfSteal)") step_random_html ;;
         "Настройка ротации логов Xray")  step_logrotate_xray ;;
