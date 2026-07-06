@@ -91,14 +91,16 @@ step_caddy_selfsteal() {
 }
 
 # ==========================================
-# ПОДМЕНЮ УСТАНОВКИ НОДЫ
+# ПОДМЕНЮ УСТАНОВКИ И УПРАВЛЕНИЯ НОДОЙ
 # ==========================================
 step_install_remnanode_menu() {
     local sub_options=(
-        "--- ВЫБЕРИТЕ ТИП УСТАНОВКИ НОДЫ ---"
+        "--- УСТАНОВКА НОДЫ ---"
         "Голая нода (Только Xray)"
         "SelfSteal нода (Nginx)"
         "SelfSteal нода (Caddy)"
+        "--- УПРАВЛЕНИЕ ---"
+        "Удалить Remnanode и очистить данные"
         "Назад в главное меню"
     )
     
@@ -112,6 +114,7 @@ step_install_remnanode_menu() {
             "Голая нода (Только Xray)") step_remnanode_setup ;;
             "SelfSteal нода (Nginx)")   step_node_nginx ;;
             "SelfSteal нода (Caddy)")   step_node_caddy ;;
+            "Удалить Remnanode и очистить данные") step_remove_remnanode ;;
             "Назад в главное меню")     return 0 ;;
         esac
         
@@ -270,29 +273,74 @@ step_node_nginx() {
     echo -e "  ${C_WHITE}SNI: ${C_ACCENT}${DOMAIN}${C_BASE}\n"
 }
 
+step_remove_remnanode() {
+    clear
+    draw_sub_header "Удаление Remnanode"
+    echo -e "  ${C_ERR}ВНИМАНИЕ: Это действие полностью удалит контейнеры ноды,${C_BASE}"
+    echo -e "  ${C_ERR}конфигурации docker-compose и файлы фейк-сайта.${C_BASE}\n"
+    read -p "  Вы уверены, что хотите продолжить? (y/n): " confirm
+    
+    if [[ "$confirm" == "y" || "$confirm" == "Y" ]]; then
+        _do_remove() {
+            if [ -d /opt/remnanode ]; then
+                cd /opt/remnanode && docker compose down -v &>/dev/null || true
+            fi
+            docker stop remnanode caddy-remnawave remnawave-nginx &>/dev/null || true
+            docker rm remnanode caddy-remnawave remnawave-nginx &>/dev/null || true
+            
+            rm -rf /opt/remnanode
+            rm -rf /var/www/html
+            rm -f /dev/shm/nginx.sock
+        }
+        run_task "Удаление файлов и контейнеров" "_do_remove"
+    else
+        echo -e "\n  ${C_DIM}Удаление отменено.${C_BASE}"
+    fi
+}
+
 # ==========================================
 # ФЕЙК-САЙТ И РОТАЦИЯ
 # ==========================================
 step_random_html() {
-    draw_sub_header "Установка фейк-сайта (SelfSteal)"
+    local tpl_options=(
+        "--- ВЫБЕРИТЕ ИСТОЧНИК ШАБЛОНОВ ---"
+        "Simple Web Templates (Полноценные сайты)"
+        "SNI Templates (Популярные лендинги)"
+        "Nothing Templates (Минималистичные заглушки)"
+        "Отмена"
+    )
     
-    echo -e "  ${C_WHITE}Выберите источник (репозиторий) шаблонов:${C_BASE}"
-    echo -e "  ${C_ACCENT}1.${C_BASE} Simple Web Templates (Полноценные сайты)"
-    echo -e "  ${C_ACCENT}2.${C_BASE} SNI Templates (Популярные лендинги)"
-    echo -e "  ${C_ACCENT}3.${C_BASE} Nothing Templates (Минималистичные заглушки)"
-    echo -e "  ${C_DIM}0. Отмена${C_BASE}\n"
-    
-    read -p "  Ваш выбор: " TPL_CHOICE
+    render_menu "${tpl_options[@]}"
+    local choice=$MENU_CHOICE
+    local selected="${tpl_options[$choice]}"
     
     local REPO_URL=""
     local REPO_DIR=""
-    case "$TPL_CHOICE" in
-        1) REPO_URL="https://github.com/eGamesAPI/simple-web-templates/archive/refs/heads/main.zip"; REPO_DIR="simple-web-templates-main" ;;
-        2) REPO_URL="https://github.com/distillium/sni-templates/archive/refs/heads/main.zip"; REPO_DIR="sni-templates-main" ;;
-        3) REPO_URL="https://github.com/prettyleaf/nothing-sni/archive/refs/heads/main.zip"; REPO_DIR="nothing-sni-main" ;;
-        0) return 0 ;;
-        *) echo -e "${C_ERR}Неверный выбор.${C_BASE}"; return 1 ;;
+    local TPL_CHOICE=""
+    
+    case "$selected" in
+        "Simple Web Templates (Полноценные сайты)")
+            REPO_URL="https://github.com/eGamesAPI/simple-web-templates/archive/refs/heads/main.zip"
+            REPO_DIR="simple-web-templates-main"
+            TPL_CHOICE=1
+            ;;
+        "SNI Templates (Популярные лендинги)")
+            REPO_URL="https://github.com/distillium/sni-templates/archive/refs/heads/main.zip"
+            REPO_DIR="sni-templates-main"
+            TPL_CHOICE=2
+            ;;
+        "Nothing Templates (Минималистичные заглушки)")
+            REPO_URL="https://github.com/prettyleaf/nothing-sni/archive/refs/heads/main.zip"
+            REPO_DIR="nothing-sni-main"
+            TPL_CHOICE=3
+            ;;
+        "Отмена" | *)
+            return 0
+            ;;
     esac
+
+    clear
+    draw_sub_header "Установка фейк-сайта (SelfSteal)"
 
     _do_random_html() {
         cd /tmp
