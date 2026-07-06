@@ -10,7 +10,7 @@
 Запустите скрипт одной командой от пользователя `root`:
 
 ```bash
-bash <(curl -sL (https://raw.githubusercontent.com/ckpnm/aio_gentle/main/main.sh))
+bash <(curl -sL https://raw.githubusercontent.com/ckpnm/aio_gentle/main/main.sh)
 ```
 
 
