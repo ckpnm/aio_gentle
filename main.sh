@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export SCRIPT_VERSION="1.19"
+export SCRIPT_VERSION="1.20"
 export GITHUB_URL="https://github.com/ckpnm/aio_gentle"
 export UPDATE_NEEDED=0
 
@@ -358,18 +358,21 @@ step_fail2ban_setup() {
     run_task "Инсталляция защитного скрипта Fail2Ban" "_do_fail2ban"
 }
 
+_do_docker() {
+    export DEBIAN_FRONTEND=noninteractive
+    if ! command -v docker &> /dev/null; then
+        apt-get update -y > /dev/null 2>&1
+        curl -fsSL https://get.docker.com | sh > /dev/null 2>&1
+        systemctl enable docker > /dev/null 2>&1
+        systemctl start docker > /dev/null 2>&1
+    fi
+    if ! docker compose version &> /dev/null; then
+        apt-get install -y docker-compose-plugin > /dev/null 2>&1
+    fi
+}
+
 step_docker_setup() {
     draw_sub_header "Среда Docker"
-    _do_docker() {
-        if ! command -v docker &> /dev/null; then
-            curl -fsSL https://get.docker.com | sh
-            systemctl enable docker
-            systemctl start docker
-        fi
-        if ! docker compose version &> /dev/null; then
-            apt-get update -y && apt-get install -y docker-compose-plugin
-        fi
-    }
     run_task "Установка Docker Engine и Compose Plugin" "_do_docker"
 }
 
@@ -388,7 +391,7 @@ step_caddy_selfsteal() {
     fi
 
     _do_selfsteal() {
-        if ! command -v docker &> /dev/null; then curl -fsSL https://get.docker.com | sh > /dev/null 2>&1; fi
+        _do_docker
         printf "%s\n1\n9443\ny\n" "$DOMAIN" | bash <(curl -Ls https://github.com/DigneZzZ/remnawave-scripts/raw/main/selfsteal.sh) @ install
     }
     run_task "Генерация маскировки и запуск Caddy Selfsteal" "_do_selfsteal"
@@ -432,7 +435,7 @@ step_remnanode_setup() {
     fi
 
     _do_remnanode() {
-        if ! command -v docker &> /dev/null; then curl -fsSL https://get.docker.com | sh > /dev/null 2>&1; fi
+        _do_docker
         mkdir -p /opt/remnanode
         mkdir -p /var/log/xray
         chmod 777 /var/log/xray
@@ -479,7 +482,7 @@ step_node_caddy() {
     if [[ -z "$SECRET_KEY" ]]; then echo -e "${C_ERR}Ключ не может быть пустым!${C_BASE}"; return 1; fi
 
     _do_node_caddy() {
-        if ! command -v docker &> /dev/null; then curl -fsSL https://get.docker.com | sh > /dev/null 2>&1; fi
+        _do_docker
         mkdir -p /opt/remnanode /var/www/html
         curl -sSL "https://raw.githubusercontent.com/legiz-ru/Orion/refs/heads/main/index.html" -o /var/www/html/index.html
 
@@ -593,30 +596,27 @@ step_node_nginx() {
     read -p "Введите Email для регистрации SSL сертификата Let's Encrypt: " CERT_EMAIL
 
     _do_node_nginx() {
-        if ! command -v docker &> /dev/null; then curl -fsSL https://get.docker.com | sh > /dev/null 2>&1; fi
+        _do_docker
         
         mkdir -p /opt/remnanode /var/www/html
         curl -sSL "https://raw.githubusercontent.com/legiz-ru/Orion/refs/heads/main/index.html" -o /var/www/html/index.html
 
-        # Жестко освобождаем 80 порт от зависших докер-контейнеров или локального веб-сервера
+        # Жестко освобождаем 80 порт
         docker stop caddy-remnawave remnawave-nginx &>/dev/null || true
         systemctl stop nginx &>/dev/null || true
         fuser -k 80/tcp &>/dev/null || true
 
         export DEBIAN_FRONTEND=noninteractive
-        if ! command -v certbot &> /dev/null; then
-            apt-get update -y > /dev/null 2>&1
-            apt-get install -y certbot > /dev/null 2>&1
-        fi
+        apt-get update -y > /dev/null 2>&1
+        apt-get install -y certbot > /dev/null 2>&1
 
         if ! command -v certbot &> /dev/null; then
-            echo -e "\n[ОШИБКА] Не удалось установить certbot. Выполните 'apt update && apt install certbot -y' вручную." >&2
+            echo -e "\n[ОШИБКА] Не удалось установить certbot." >&2
             return 1
         fi
 
         ufw allow 80/tcp > /dev/null 2>&1
         
-        # Вывод certbot пишем в общий лог, чтобы не гадать, почему сертификат не создался
         if ! certbot certonly --standalone -d "$DOMAIN" --email "$CERT_EMAIL" --agree-tos --non-interactive; then
             echo -e "\n[ОШИБКА] Ошибка certbot при получении сертификата. Подробности выше в логе." >&2
             ufw delete allow 80/tcp > /dev/null 2>&1
