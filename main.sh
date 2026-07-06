@@ -36,7 +36,7 @@ trap "cursor_on; echo; exit" SIGINT
 
 pause() {
     cursor_off
-    echo -e "\n${C_OK}Нажми любую клавишу для возврата в меню...${C_BASE}"
+    echo -e "\n${C_OK}Нажми любую клавишу для возврата...${C_BASE}"
     read -rsn1
 }
 
@@ -63,7 +63,7 @@ draw_header() {
 
     local total_width=37
    
-    local title_text="Λ I Ø - G E N T Ł E "
+    local title_text="A I O - GENTLE "
     local ver_text="v${SCRIPT_VERSION}"
     local title_len=$(( ${#title_text} + ${#ver_text} ))
     local pad_left=$(( (total_width - title_len) / 2 ))
@@ -72,7 +72,7 @@ draw_header() {
     local p_l=$(printf "%${pad_left}s" "")
     local p_r=$(printf "%${pad_right}s" "")
 
-    local sub_text="by •skrım—"
+    local sub_text="utility"
     local sub_len=${#sub_text}
     local sub_pad_left=$(( pad_left + title_len - sub_len ))
     local sub_pad_right=$(( total_width - sub_pad_left - sub_len ))
@@ -249,17 +249,11 @@ step_info() {
     
     echo -e "  ${C_ACCENT}● Zover1337${C_BASE} — ${C_DIM}https://github.com/Zover1337${C_BASE}"
     echo -e "  ${C_ACCENT}● jaywehosl${C_BASE} — ${C_DIM}https://github.com/jaywehosl${C_BASE}"
-    echo -e "  ${C_ACCENT}● Loorrr293${C_BASE} — ${C_DIM}https://github.com/Loorrr293${C_BASE}\n"
+    echo -e "  ${C_ACCENT}● Loorrr293${C_BASE} — ${C_DIM}https://github.com/Loorrr293${C_BASE}"
+    echo -e "  ${C_ACCENT}● eGamesAPI${C_BASE} — ${C_DIM}https://github.com/eGamesAPI${C_BASE}\n"
     
     echo -e "  ${C_WHITE}Также спасибо всем мейнтейнерам Xray, Remnawave и других проектов.${C_BASE}"
 }
-
-# ПОДГРУЗКА ВНЕШНИХ МОДУЛЕЙ (ЕСЛИ ОНИ ЕСТЬ)
-if [ -d "$MODULES_DIR" ]; then
-    while IFS= read -r -d '' f; do
-        source "$f"
-    done < <(find "$MODULES_DIR" -type f -name "*.sh" -print0)
-fi
 
 # ==========================================
 # ИСПОЛНЯЕМЫЕ СКРИПТЫ (ФУНКЦИОНАЛ)
@@ -269,7 +263,7 @@ step_base_deps() {
     draw_sub_header "Базовая подготовка"
     _do_base_deps() {
         apt-get update -y
-        apt-get install -y curl ufw logrotate sudo git dnsutils
+        apt-get install -y curl ufw logrotate sudo git dnsutils unzip
     }
     run_task "Обновление кэша пакетов и установка зависимостей" "_do_base_deps"
 }
@@ -377,8 +371,37 @@ step_caddy_selfsteal() {
     run_task "Генерация маскировки и запуск Caddy Selfsteal" "_do_selfsteal"
 }
 
+# ==========================================
+# ПОДМЕНЮ УСТАНОВКИ НОДЫ
+# ==========================================
+step_install_remnanode_menu() {
+    local sub_options=(
+        "--- ВЫБЕРИТЕ ТИП УСТАНОВКИ НОДЫ ---"
+        "Голая нода (Только Xray)"
+        "SelfSteal нода (Nginx)"
+        "SelfSteal нода (Caddy)"
+        "Назад в главное меню"
+    )
+    
+    while true; do
+        render_menu "${sub_options[@]}"
+        local sub_choice=$MENU_CHOICE
+        local SUB_NEEDS_PAUSE=1
+        
+        clear
+        case "${sub_options[$sub_choice]}" in
+            "Голая нода (Только Xray)") step_remnanode_setup ;;
+            "SelfSteal нода (Nginx)")   step_node_nginx ;;
+            "SelfSteal нода (Caddy)")   step_node_caddy ;;
+            "Назад в главное меню")     return 0 ;;
+        esac
+        
+        if [ "$SUB_NEEDS_PAUSE" -eq 1 ]; then pause; fi
+    done
+}
+
 step_remnanode_setup() {
-    draw_sub_header "Развертывание Remnanode"
+    draw_sub_header "Голая нода (Remnanode)"
     read -p "Введите SecretKey из вашей панели Remnawave: " SECRET_KEY
     if [[ -z "$SECRET_KEY" ]]; then
         echo -e "${C_ERR}Ошибка: Ключ отсутствует!${C_BASE}"
@@ -415,6 +438,331 @@ step_remnanode_setup() {
         docker compose up -d
     }
     run_task "Запись docker-compose и запуск ноды" "_do_remnanode"
+}
+
+step_node_caddy() {
+    draw_sub_header "Remnanode + Caddy (SelfSteal)"
+    
+    read -p "Введите домен для маскировки (напр. node.site.com): " DOMAIN
+    if [[ -z "$DOMAIN" ]]; then echo -e "${C_ERR}Домен не может быть пустым!${C_BASE}"; return 1; fi
+
+    while true; do
+        read -p "Введите IP-адрес вашей ПАНЕЛИ Remnawave: " PANEL_IP
+        if [[ "$PANEL_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then break; else echo -e "${C_ERR}Неверный формат IP!${C_BASE}"; fi
+    done
+
+    read -p "Введите SecretKey из панели: " SECRET_KEY
+    if [[ -z "$SECRET_KEY" ]]; then echo -e "${C_ERR}Ключ не может быть пустым!${C_BASE}"; return 1; fi
+
+    _do_node_caddy() {
+        mkdir -p /opt/remnanode /var/www/html
+        curl -sSL "https://raw.githubusercontent.com/legiz-ru/Orion/refs/heads/main/index.html" -o /var/www/html/index.html
+
+        cat << EOF > /opt/remnanode/docker-compose.yml
+x-common: &common
+  ulimits:
+    nofile: { soft: 1048576, hard: 1048576 }
+  restart: always
+
+x-logging: &logging
+  logging:
+    driver: json-file
+    options: { max-size: 100m, max-file: 5 }
+
+services:
+  caddy:
+    image: caddy:2.11.2
+    container_name: caddy-remnawave
+    hostname: caddy-remnawave
+    <<: [*common, *logging]
+    network_mode: host
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - /var/www/html:/var/www/html:ro
+      - /dev/shm:/dev/shm:rw
+      - caddy_data:/data
+    command: sh -c 'rm -f /dev/shm/nginx.sock && caddy run --config /etc/caddy/Caddyfile --adapter caddyfile'
+    environment:
+      - CADDY_SOCKET_PATH=/dev/shm/nginx.sock
+      - SELF_STEAL_DOMAIN=${DOMAIN}
+
+  remnanode:
+    image: remnawave/node:latest
+    container_name: remnanode
+    hostname: remnanode
+    <<: [*common, *logging]
+    network_mode: host
+    cap_add: [ NET_ADMIN ]
+    environment:
+      - NODE_PORT=2222
+      - SECRET_KEY=${SECRET_KEY}
+    volumes:
+      - /dev/shm:/dev/shm:rw
+
+volumes:
+  caddy_data:
+EOF
+
+        cat << EOF > /opt/remnanode/Caddyfile
+{
+    admin off
+    servers {
+        listener_wrappers {
+            proxy_protocol
+            tls
+        }
+    }
+    auto_https disable_redirects
+}
+http://{\$SELF_STEAL_DOMAIN} {
+    bind 0.0.0.0
+    redir https://{\$SELF_STEAL_DOMAIN}{uri} permanent
+}
+https://{\$SELF_STEAL_DOMAIN} {
+    bind unix/{\$CADDY_SOCKET_PATH}
+    root * /var/www/html
+    try_files {path} /index.html
+    file_server
+}
+:80 {
+    bind 0.0.0.0
+    respond 204
+}
+EOF
+
+        ufw allow 80/tcp > /dev/null 2>&1
+        ufw allow from $PANEL_IP to any port 2222 > /dev/null 2>&1
+        ufw reload > /dev/null 2>&1
+
+        cd /opt/remnanode
+        docker compose down &>/dev/null || true
+        docker compose up -d
+    }
+
+    run_task "Развертывание Ноды и Caddy" "_do_node_caddy"
+    
+    echo -e "\n  ${C_INV} ВАЖНО: НАСТРОЙКА В ПАНЕЛИ REMNAWAVE ${C_BASE}"
+    echo -e "  ${C_WHITE}В настройках подключения (Inbound -> Reality) укажите:${C_BASE}"
+    echo -e "  ${C_DIM}----------------------------------------${C_BASE}"
+    echo -e "  ${C_ACCENT}\"dest\": \"/dev/shm/nginx.sock\",${C_BASE}"
+    echo -e "  ${C_ACCENT}\"show\": false,${C_BASE}"
+    echo -e "  ${C_ACCENT}\"xver\": 1${C_BASE}"
+    echo -e "  ${C_DIM}----------------------------------------${C_BASE}"
+    echo -e "  ${C_WHITE}SNI: ${C_ACCENT}${DOMAIN}${C_BASE}\n"
+}
+
+step_node_nginx() {
+    draw_sub_header "Remnanode + Nginx (SelfSteal)"
+    
+    read -p "Введите домен для маскировки (напр. node.site.com): " DOMAIN
+    if [[ -z "$DOMAIN" ]]; then echo -e "${C_ERR}Домен не может быть пустым!${C_BASE}"; return 1; fi
+
+    while true; do
+        read -p "Введите IP-адрес вашей ПАНЕЛИ Remnawave: " PANEL_IP
+        if [[ "$PANEL_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then break; else echo -e "${C_ERR}Неверный формат IP!${C_BASE}"; fi
+    done
+
+    read -p "Введите SecretKey из панели: " SECRET_KEY
+    if [[ -z "$SECRET_KEY" ]]; then echo -e "${C_ERR}Ключ не может быть пустым!${C_BASE}"; return 1; fi
+    
+    read -p "Введите Email для регистрации SSL сертификата Let's Encrypt: " CERT_EMAIL
+
+    _do_node_nginx() {
+        mkdir -p /opt/remnanode /var/www/html
+        curl -sSL "https://raw.githubusercontent.com/legiz-ru/Orion/refs/heads/main/index.html" -o /var/www/html/index.html
+
+        apt-get install -y certbot > /dev/null 2>&1
+        ufw allow 80/tcp > /dev/null 2>&1
+        certbot certonly --standalone -d "$DOMAIN" --email "$CERT_EMAIL" --agree-tos --non-interactive > /dev/null 2>&1
+        ufw delete allow 80/tcp > /dev/null 2>&1
+
+        if [ ! -d "/etc/letsencrypt/live/$DOMAIN" ]; then
+            echo "Ошибка генерации сертификата. Проверьте DNS записи домена." >&2
+            return 1
+        fi
+
+        cat << EOF > /opt/remnanode/docker-compose.yml
+x-common: &common
+  ulimits: { nofile: { soft: 1048576, hard: 1048576 } }
+  restart: always
+
+x-logging: &logging
+  logging:
+    driver: json-file
+    options: { max-size: 100m, max-file: 5 }
+
+services:
+  remnawave-nginx:
+    image: nginx:1.28
+    container_name: remnawave-nginx
+    hostname: remnawave-nginx
+    <<: [*common, *logging]
+    network_mode: host
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/letsencrypt/live/$DOMAIN/fullchain.pem:/etc/nginx/ssl/$DOMAIN/fullchain.pem:ro
+      - /etc/letsencrypt/live/$DOMAIN/privkey.pem:/etc/nginx/ssl/$DOMAIN/privkey.pem:ro
+      - /dev/shm:/dev/shm:rw
+      - /var/www/html:/var/www/html:ro
+    command: sh -c 'rm -f /dev/shm/nginx.sock && exec nginx -g "daemon off;"'
+
+  remnanode:
+    image: remnawave/node:latest
+    container_name: remnanode
+    hostname: remnanode
+    <<: [*common, *logging]
+    network_mode: host
+    cap_add: [ NET_ADMIN ]
+    environment:
+      - NODE_PORT=2222
+      - SECRET_KEY=${SECRET_KEY}
+    volumes:
+      - /dev/shm:/dev/shm:rw
+EOF
+
+        cat << EOF > /opt/remnanode/nginx.conf
+server_names_hash_bucket_size 64;
+map \$http_upgrade \$connection_upgrade { default upgrade; "" close; }
+
+ssl_protocols TLSv1.2 TLSv1.3;
+ssl_ecdh_curve X25519:prime256v1:secp384r1;
+ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:DHE-RSA-CHACHA20-POLY1305;
+ssl_prefer_server_ciphers on;
+ssl_session_timeout 1d;
+ssl_session_cache shared:MozSSL:10m;
+ssl_session_tickets off;
+
+server {
+    server_name $DOMAIN;
+    listen unix:/dev/shm/nginx.sock ssl proxy_protocol;
+    http2 on;
+
+    ssl_certificate "/etc/nginx/ssl/$DOMAIN/fullchain.pem";
+    ssl_certificate_key "/etc/nginx/ssl/$DOMAIN/privkey.pem";
+    ssl_trusted_certificate "/etc/nginx/ssl/$DOMAIN/fullchain.pem";
+
+    root /var/www/html;
+    index index.html;
+    add_header X-Robots-Tag "noindex, nofollow, noarchive, nosnippet, noimageindex" always;
+}
+
+server {
+    listen unix:/dev/shm/nginx.sock ssl proxy_protocol default_server;
+    server_name _;
+    add_header X-Robots-Tag "noindex, nofollow, noarchive, nosnippet, noimageindex" always;
+    ssl_reject_handshake on;
+    return 444;
+}
+EOF
+
+        ufw allow from $PANEL_IP to any port 2222 > /dev/null 2>&1
+        ufw reload > /dev/null 2>&1
+
+        cd /opt/remnanode
+        docker compose down &>/dev/null || true
+        docker compose up -d
+    }
+
+    run_task "Развертывание Ноды и Nginx" "_do_node_nginx"
+    
+    echo -e "\n  ${C_INV} ВАЖНО: НАСТРОЙКА В ПАНЕЛИ REMNAWAVE ${C_BASE}"
+    echo -e "  ${C_WHITE}В настройках подключения (Inbound -> Reality) укажите:${C_BASE}"
+    echo -e "  ${C_DIM}----------------------------------------${C_BASE}"
+    echo -e "  ${C_ACCENT}\"dest\": \"/dev/shm/nginx.sock\",${C_BASE}"
+    echo -e "  ${C_ACCENT}\"show\": false,${C_BASE}"
+    echo -e "  ${C_ACCENT}\"xver\": 1${C_BASE}"
+    echo -e "  ${C_DIM}----------------------------------------${C_BASE}"
+    echo -e "  ${C_WHITE}SNI: ${C_ACCENT}${DOMAIN}${C_BASE}\n"
+}
+
+step_random_html() {
+    draw_sub_header "Установка фейк-сайта (SelfSteal)"
+    
+    echo -e "  ${C_WHITE}Выберите источник (репозиторий) шаблонов:${C_BASE}"
+    echo -e "  ${C_ACCENT}1.${C_BASE} Simple Web Templates (Полноценные сайты)"
+    echo -e "  ${C_ACCENT}2.${C_BASE} SNI Templates (Популярные лендинги)"
+    echo -e "  ${C_ACCENT}3.${C_BASE} Nothing Templates (Минималистичные заглушки)"
+    echo -e "  ${C_DIM}0. Отмена${C_BASE}\n"
+    
+    read -p "  Ваш выбор: " TPL_CHOICE
+    
+    local REPO_URL=""
+    local REPO_DIR=""
+    case "$TPL_CHOICE" in
+        1) REPO_URL="https://github.com/eGamesAPI/simple-web-templates/archive/refs/heads/main.zip"; REPO_DIR="simple-web-templates-main" ;;
+        2) REPO_URL="https://github.com/distillium/sni-templates/archive/refs/heads/main.zip"; REPO_DIR="sni-templates-main" ;;
+        3) REPO_URL="https://github.com/prettyleaf/nothing-sni/archive/refs/heads/main.zip"; REPO_DIR="nothing-sni-main" ;;
+        0) return 0 ;;
+        *) echo -e "${C_ERR}Неверный выбор.${C_BASE}"; return 1 ;;
+    esac
+
+    _do_random_html() {
+        cd /tmp
+        rm -f main.zip
+        rm -rf "$REPO_DIR"
+
+        wget -q --timeout=30 --tries=3 "$REPO_URL" -O main.zip || return 1
+        unzip -o main.zip >/dev/null 2>&1 || return 1
+        rm -f main.zip
+
+        cd "$REPO_DIR" || return 1
+
+        rm -rf assets .gitattributes README.md _config.yml .github index.html 2>/dev/null || true
+
+        local SELECTED_ITEM=""
+        if [[ "$TPL_CHOICE" == "3" ]]; then
+            SELECTED_ITEM="$((RANDOM % 8 + 1)).html"
+        else
+            mapfile -t templates < <(find . -maxdepth 1 -type d -not -path . | sed 's|^\./||')
+            SELECTED_ITEM="${templates[$RANDOM % ${#templates[@]}]}"
+
+            if [[ "$TPL_CHOICE" == "2" && "$SELECTED_ITEM" == "503 error pages" ]]; then
+                local versions=("v1" "v2")
+                SELECTED_ITEM="$SELECTED_ITEM/${versions[$RANDOM % ${#versions[@]}]}"
+            fi
+        fi
+
+        local r_meta_id=$(openssl rand -hex 16)
+        local r_comment=$(openssl rand -hex 8)
+        local r_class_suf=$(openssl rand -hex 4)
+        local r_title_suf=$(openssl rand -hex 4)
+        local r_id_suf=$(openssl rand -hex 4)
+        local r_user="User$(openssl rand -hex 2)"
+        
+        local meta_names=("viewport-id" "session-id" "track-id" "render-id" "page-id")
+        local r_meta_name=${meta_names[$RANDOM % ${#meta_names[@]}]}
+        
+        local class_prefs=("style" "data" "ui" "layout" "theme")
+        local r_class="${class_prefs[$RANDOM % ${#class_prefs[@]}]}-$r_class_suf"
+
+        find "./$SELECTED_ITEM" -type f -name "*.html" -exec sed -i \
+            -e "s|||g" \
+            -e "s|||g" \
+            -e "s|id=\"Content\"|id=\"rnd_${r_id_suf}\"|g" \
+            -e "s|<title>.*</title>|<title>Page_${r_title_suf}</title>|g" \
+            -e "s/<\/head>/<meta name=\"$r_meta_name\" content=\"$r_meta_id\">\n\n<\/head>/g" \
+            -e "s/<body/<body class=\"$r_class\"/g" \
+            -e "s/CHANGEMEPLS/$r_user/g" {} +
+            
+        find "./$SELECTED_ITEM" -type f -name "*.css" -exec sed -i \
+            -e "1i\/* $r_comment */" \
+            -e "1i.$r_class { display: block; }" {} + 2>/dev/null || true
+
+        mkdir -p /var/www/html
+        rm -rf /var/www/html/*
+        
+        if [[ -d "./$SELECTED_ITEM" ]]; then
+            cp -a "./$SELECTED_ITEM/." "/var/www/html/"
+        else
+            cp "./$SELECTED_ITEM" "/var/www/html/index.html"
+        fi
+        
+        cd /tmp
+        rm -rf "$REPO_DIR"
+    }
+
+    run_task "Загрузка и маскировка шаблона" "_do_random_html"
+    echo -e "  ${C_OK}[ ИНФО ]${C_BASE} Шаблон успешно установлен и замаскирован."
 }
 
 step_logrotate_xray() {
@@ -656,7 +1004,6 @@ step_speedtest() {
     run_task "Установка Ookla Speedtest CLI" "_do_install_speedtest"
     
     echo -e "\n${C_DIM}Запуск тестирования сети...${C_BASE}\n"
-    # Запускаем открыто в терминале, чтобы юзер видел анимацию загрузки
     speedtest --accept-license --accept-gdpr
     echo
 }
@@ -678,6 +1025,12 @@ step_show_reality() {
         echo -e "${C_ERR}Не удалось сгенерировать ключи автоматически.${C_BASE}"
         echo -e "Вызовите вручную: ${C_BOLD}docker exec -it remnanode xray x25519${C_BASE}"
     fi
+    
+    echo -e "\n${C_WHITE}Настройки Fallback (для SelfSteal):${C_BASE}"
+    echo -e "  dest: ${C_ACCENT}/dev/shm/nginx.sock${C_BASE}"
+    echo -e "  show: ${C_ACCENT}false${C_BASE}"
+    echo -e "  xver: ${C_ACCENT}1${C_BASE}"
+    
     echo -e "\n${C_WHITE}Инфо по подключению ноды:${C_BASE}"
     echo -e "  NODE_PORT (в панели): ${C_ACCENT}2222${C_BASE}"
     echo -e "  Директория логов:     ${C_DIM}/var/log/xray${C_BASE}"
@@ -769,7 +1122,7 @@ declare -A PRIMARY_SERVICES=(
   [IPAPI_CO]="ipapi.co|ipapi.co|/{ip}/json"
   [CLOUDFLARE]="cloudflare.com|speed.cloudflare.com|/meta"
   [IFCONFIG_CO]="ifconfig.co|ifconfig.co|/country-iso?ip={ip}|plain"
-  [IP2LOCATION_IO]="ip2location.io|api.ip2location.io|/?ip={ip}"
+  [IP2LOCATION_IO]="ip2location.io|ip2location.io|/?ip={ip}"
   [IPLOCATION_COM]="iplocation.com|iplocation.com"
   [COUNTRY_IS]="country.is|api.country.is|/{ip}"
   [GEOAPIFY_COM]="geoapify.com|api.geoapify.com|/v1/ipinfo?&ip={ip}&apiKey=b8568cb9afc64fad861a69edbddb2658"
@@ -1747,7 +2100,8 @@ options=(
     "--- РАЗВЕРТЫВАНИЕ REMNAWAVE ---"
     "Установка Docker & Compose"
     "Caddy Selfsteal (Сертификаты)"
-    "Установка Remnanode (Docker)"
+    "Установка Remnanode"
+    "Установка фейк-сайта (SelfSteal)"
     "Настройка ротации логов Xray"
     "--- ЗАЩИТА И ДОПОЛНЕНИЯ ---"
     "Установка Traffic Guard"
@@ -1781,7 +2135,8 @@ while true; do
         "Установка Fail2Ban")            step_fail2ban_setup ;;
         "Установка Docker & Compose")    step_docker_setup ;;
         "Caddy Selfsteal (Сертификаты)") step_caddy_selfsteal ;;
-        "Установка Remnanode (Docker)")  step_remnanode_setup ;;
+        "Установка Remnanode")           step_install_remnanode_menu; NEEDS_PAUSE=0 ;;
+        "Установка фейк-сайта (SelfSteal)") step_random_html ;;
         "Настройка ротации логов Xray")  step_logrotate_xray ;;
         "Установка Traffic Guard")       step_traffic_guard_setup ;;
         "Блокировка Leaseweb & HE (iptables)") step_block_asn ;;
