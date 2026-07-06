@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export SCRIPT_VERSION="1.06"
+export SCRIPT_VERSION=" 1.06"
 export GITHUB_URL="https://github.com/ckpnm/aio_gentle"
 export REPO_RAW_URL="https://raw.githubusercontent.com/ckpnm/aio_gentle/main"
 
