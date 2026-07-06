@@ -965,11 +965,6 @@ generate_random_user_agent(){
 
 adapt_locale(){ export LC_CTYPE=en_US.UTF-8 2>/dev/null; }
 
-check_connectivity(){
-  rawgithub="https://github.com/xykt/IPQuality/raw/"
-  return 0
-}
-
 is_valid_ipv4(){
   local ip=$1
   if [[ $ip =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]];then
@@ -1993,7 +1988,7 @@ check_dnsbl_parallel(){
   smail[t]=0; smail[c]=0; smail[m]=0; smail[b]=0
   reversed_ip=$(echo "$ip_to_check"|awk -F. '{print $4"."$3"."$2"."$1}')
   local total=0 clean=0 blacklisted=0 other=0
-  curl $CurlARG -sL "${rawgithub}main/ref/dnsbl.list"|sort -u|xargs -P "$parallel_jobs" -I {} bash -c "result=\$(dig +short \"$reversed_ip.{}\" A); if [[ -z \"\$result\" ]]; then echo 'Clean'; elif [[ \"\$result\" == '127.0.0.2' ]]; then echo 'Blacklisted'; else echo 'Other'; fi"|{
+  curl $CurlARG -sL "https://github.com/xykt/IPQuality/raw/main/ref/dnsbl.list"|sort -u|xargs -P "$parallel_jobs" -I {} bash -c "result=\$(dig +short \"$reversed_ip.{}\" A); if [[ -z \"\$result\" ]]; then echo 'Clean'; elif [[ \"\$result\" == '127.0.0.2' ]]; then echo 'Blacklisted'; else echo 'Other'; fi"|{
   while IFS= read -r line;do
     ((total++))
     case "$line" in
@@ -2022,28 +2017,28 @@ check_dnsbl(){
 }
 
 show_head(){
-  echo -ne "\r$(printf '%72s'|tr ' ' '#')\n"
+  echo -ne "\r  $(printf '%72s'|tr ' ' '#')\n"
   if [[ $mode_lite -eq 0 ]];then
     if [ $fullIP -eq 1 ];then
       calc_padding "$(printf '%*s' "${shead[ltitle]}" '')$IP" 72
-      echo -ne "\r$PADDING$Font_B${shead[title]}$Font_Cyan$IP$Font_Suffix\n"
+      echo -ne "\r  $PADDING$Font_B${shead[title]}$Font_Cyan$IP$Font_Suffix\n"
     else
       calc_padding "$(printf '%*s' "${shead[ltitle]}" '')$IPhide" 72
-      echo -ne "\r$PADDING$Font_B${shead[title]}$Font_Cyan$IPhide$Font_Suffix\n"
+      echo -ne "\r  $PADDING$Font_B${shead[title]}$Font_Cyan$IPhide$Font_Suffix\n"
     fi
   else
     if [ $fullIP -eq 1 ];then
       calc_padding "$(printf '%*s' "${shead[ltitle_lite]}" '')$IP" 72
-      echo -ne "\r$PADDING$Font_B${shead[title_lite]}$Font_Cyan$IP$Font_Suffix\n"
+      echo -ne "\r  $PADDING$Font_B${shead[title_lite]}$Font_Cyan$IP$Font_Suffix\n"
     else
       calc_padding "$(printf '%*s' "${shead[ltitle_lite]}" '')$IPhide" 72
-      echo -ne "\r$PADDING$Font_B${shead[title_lite]}$Font_Cyan$IPhide$Font_Suffix\n"
+      echo -ne "\r  $PADDING$Font_B${shead[title_lite]}$Font_Cyan$IPhide$Font_Suffix\n"
     fi
   fi
   calc_padding "${shead[git]}" 72
-  echo -ne "\r$PADDING$Font_U${shead[git]}$Font_Suffix\n"
-  echo -ne "\r${shead[ptime]}${shead[time]}  ${shead[ver]}\n"
-  echo -ne "\r$(printf '%72s'|tr ' ' '#')\n"
+  echo -ne "\r  $PADDING$Font_U${shead[git]}$Font_Suffix\n"
+  echo -ne "\r  ${shead[ptime]}${shead[time]}  ${shead[ver]}\n"
+  echo -ne "\r  $(printf '%72s'|tr ' ' '#')\n"
 }
 
 show_basic(){
@@ -2276,7 +2271,7 @@ show_mail(){
 }
 
 show_tail(){
-  echo -ne "\r$(printf '%72s'|tr ' ' '=')\n"
+  echo -ne "\r  $(printf '%72s'|tr ' ' '=')\n"
 }
 
 get_opts(){
@@ -2341,8 +2336,12 @@ check_IP(){
 
 generate_random_user_agent
 adapt_locale
-check_connectivity
-read_ref
+
+# Явное объявление переменных для корректной работы
+rawgithub="https://github.com/xykt/IPQuality/raw/"
+Media_Cookie=$(curl $CurlARG -sL --retry 3 --max-time 10 "${rawgithub}main/ref/cookies.txt")
+IATA_Database="${rawgithub}main/ref/iata-icao.csv"
+
 get_ipv4
 get_ipv6
 is_valid_ipv4 $IPV4
