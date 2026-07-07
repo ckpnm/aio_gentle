@@ -201,13 +201,15 @@ load_module() {
     local remote_url="$REPO_RAW_URL/modules/$mod_name"
 
     if [ ! -f "$local_file" ] || [ "$FORCE_UPDATE" = "1" ]; then
-        curl -sSL --connect-timeout 5 --max-time 15 "$remote_url" -o "$local_file"
+        # Добавили --retry 3 (3 попытки) и увеличили таймауты
+        curl -sSL --retry 3 --retry-delay 2 --connect-timeout 10 --max-time 30 "$remote_url" -o "$local_file"
     fi
     
-    if [ -f "$local_file" ]; then
+    # Проверяем, что файл существует и он не пустой (-s)
+    if [ -f "$local_file" ] && [ -s "$local_file" ]; then
         source "$local_file"
     else
-        echo -e "\n${C_ERR}Критическая ошибка: Не удалось загрузить модуль $mod_name${C_BASE}"
+        echo -e "\n${C_ERR}Критическая ошибка: Не удалось загрузить модуль $mod_name. Проверьте связь с GitHub.${C_BASE}"
         exit 1
     fi
 }
