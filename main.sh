@@ -198,18 +198,30 @@ run_task() {
 load_module() {
     local mod_name="$1"
     local local_file="$MODULES_DIR/$mod_name"
-    local remote_url="$REPO_RAW_URL/modules/$mod_name"
+    
+    
+    local mirrors=(
+        "$REPO_RAW_URL/modules"
+        "https://ghproxy.net/$REPO_RAW_URL/modules"
+        "https://fastly.jsdelivr.net/gh/ckpnm/aio_gentle@main/modules"
+    )
 
     if [ ! -f "$local_file" ] || [ "$FORCE_UPDATE" = "1" ]; then
-        # Добавили --retry 3 (3 попытки) и увеличили таймауты
-        curl -sSL --retry 3 --retry-delay 2 --connect-timeout 10 --max-time 30 "$remote_url" -o "$local_file"
+        for base_url in "${mirrors[@]}"; do
+           
+            curl -4 -sSL --connect-timeout 5 --max-time 15 "$base_url/$mod_name" -o "$local_file"
+            
+        
+            if [ -s "$local_file" ]; then
+                break
+            fi
+        done
     fi
     
-    # Проверяем, что файл существует и он не пустой (-s)
     if [ -f "$local_file" ] && [ -s "$local_file" ]; then
         source "$local_file"
     else
-        echo -e "\n${C_ERR}Критическая ошибка: Не удалось загрузить модуль $mod_name. Проверьте связь с GitHub.${C_BASE}"
+        echo -e "\n${C_ERR}Критическая ошибка: Не удалось загрузить модуль $mod_name ни с одного из зеркал.${C_BASE}"
         exit 1
     fi
 }
