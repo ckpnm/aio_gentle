@@ -46,7 +46,7 @@ A I O - GENTLE берет на себя установку Remnanode — от Do
 
 **AS Block**
 
-Блокировка подсетей Leaseweb и Hurricane Electric через `ipset` + `iptables` с автоматическим еженедельным обновлением.
+Блокировка зараженных БОТНЕТ подсетей Leaseweb и Hurricane Electric через `ipset` + `iptables` с автоматическим еженедельным обновлением.
 
 **URL Block**
 
@@ -56,42 +56,59 @@ A I O - GENTLE берет на себя установку Remnanode — от Do
 
 ## 📊 Диагностика
 
-**Reality Keys**
+Утилита включает встроенный набор инструментов для проверки сервера.
 
-Получение Reality-параметров (`privateKey`, `publicKey`, `dest`, `xver`) напрямую из Docker-контейнера.
+### CensorCheck
 
-**IP Region Check**
+Проверка доступности популярных сервисов и выявление признаков DPI или DNS-подмены.
 
-Проверка географии IP по базам MaxMind и RIPE, а также доступности популярных сервисов (Netflix, Spotify, ChatGPT и других).
+### IP Quality
 
-**Speedtest CLI**
+Комплексная проверка IP-адреса:
 
-Установка и запуск официального клиента Ookla.
+- репутация;
+- AbuseIPDB;
+- Scamalytics;
+- IP2Location;
+- DB-IP;
+- доступность Netflix, Disney+, TikTok;
+- SMTP/DNSBL.
 
-**Полное удаление**
+### Speedtest
 
-Очистка контейнеров, образов, конфигурации и временных файлов Remnanode для чистой переустановки.
+Поддерживаются:
+
+- Ookla Speedtest;
+- iPerf3 с готовым списком российских серверов.
+
+### Reality
+
+Просмотр X25519-ключей и параметров Reality непосредственно из контейнера.
 
 ---
 
-# 📂 Структура проекта
+## 📁 Структура
 
-```text
-main.sh     # TUI и основная логика
-modules/    # функциональные модули
-src/        # шаблоны docker-compose, Caddy и Nginx
+```
+main.sh      — загрузчик и интерфейс
+modules/     — функциональные модули
+src/         — шаблоны конфигураций
 ```
 
 ---
 
-# 🙏 Благодарности
+## 🙏 Благодарности
 
 Проект основан на идеях и решениях сообщества.
 
 Спасибо:
 
-* **eGamesAPI** — идеи установочных скриптов и шаблонов.
-* **Zover1337** — автоматизация Fail2Ban.
-* **Loorrr293** — актуальные блок-листы.
-* **vernette** — инструмент IP Region Check.
+- **[eGamesAPI](https://github.com/eGamesAPI)** — идеи установочных скриптов и шаблонов.
+- **[Zover1337](https://github.com/Zover1337)** — автоматизация Fail2Ban.
+- **[Loorrr293](https://github.com/Loorrr293)** — актуальные блок-листы.
+- **[distillium](https://github.com/distillium)** — WARP Native и Watchdog.
+- **[Davoyan](https://github.com/Davoyan)** — CensorCheck.
+- **[vernette](https://github.com/vernette)** — IP Region Check.
+- **[xykt](https://github.com/xykt)** — IP Quality.
+- **[itdoginfo](https://github.com/itdoginfo)** — публичный список iPerf3-серверов.
 
