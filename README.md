@@ -16,15 +16,15 @@ bash <(curl -sL https://raw.githubusercontent.com/ckpnm/aio_gentle/main/main.sh)
 
 # 🛠 Возможности
 
-## 📦 Развертывание Remnanode
+## 📦 Установка Remnanode
 
-A I O - GENTLE берет на себя установку Remnanode — от Docker до SSL — и предлагает три варианта развертывания:
+A I O - GENTLE предлагает три варианта установки:
 
 * **Remnanode** — только Xray, без лишних компонентов.
 * **Remnanode + Caddy** — автоматическое получение SSL и проксирование через Caddy.
 * **Remnanode + Nginx** — Nginx с автоматической настройкой сертификатов.
 
-Во всех прокси-конфигурациях связь между прокси и Xray осуществляется через Unix-сокеты (`/dev/shm/nginx.sock`) в оперативной памяти вместо TCP-портов.
+В Nginx и Caddy конфигурациях связь между прокси и Xray осуществляется через Unix-сокеты (`/dev/shm/nginx.sock`) в оперативной памяти вместо TCP-портов.
 
 ---
 
