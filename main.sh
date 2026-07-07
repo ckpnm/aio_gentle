@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export SCRIPT_VERSION=" 1.06"
+export SCRIPT_VERSION="1.06"
 export GITHUB_URL="https://github.com/ckpnm/aio_gentle"
 export REPO_RAW_URL="https://raw.githubusercontent.com/ckpnm/aio_gentle/main"
 
@@ -104,12 +104,11 @@ _draw_progress() {
     local pid=$1
     local width=15; local p=0; local delay=0.1; local ticks=0
     while kill -0 "$pid" 2>/dev/null; do
-        local bar=" "
+        local bar="["
         for ((i=0; i<width; i++)); do
-            # Заменили квадраты на кружки
             if [ $i -lt $p ]; then bar+="●"; else bar+="○"; fi
         done
-        bar+=" "
+        bar+="]"
         printf "\e[u%b%s%b" "$C_ACCENT" "$bar" "$C_BASE"
         sleep $delay
         ((ticks++))
@@ -199,7 +198,6 @@ load_module() {
     local mod_name="$1"
     local local_file="$MODULES_DIR/$mod_name"
     
-    
     local mirrors=(
         "$REPO_RAW_URL/modules"
         "https://ghproxy.net/$REPO_RAW_URL/modules"
@@ -208,10 +206,8 @@ load_module() {
 
     if [ ! -f "$local_file" ] || [ "$FORCE_UPDATE" = "1" ]; then
         for base_url in "${mirrors[@]}"; do
-           
-            curl -4 -sSL --connect-timeout 5 --max-time 15 "$base_url/$mod_name" -o "$local_file"
+            curl -4 -sSL --retry 2 --connect-timeout 5 --max-time 15 "$base_url/$mod_name" -o "$local_file"
             
-        
             if [ -s "$local_file" ]; then
                 break
             fi
@@ -230,6 +226,7 @@ _sync_core_modules() {
     local core_modules=("base.sh" "remnanode.sh" "security.sh" "diagnostics.sh" "system.sh")
     for mod in "${core_modules[@]}"; do
         load_module "$mod"
+        sleep 1
     done
 }
 
@@ -239,7 +236,10 @@ _sync_core_modules
 clear
 
 if [ ! -f /usr/local/bin/aio_gentle ]; then
-    ln -sf "$AIO_DIR/main.sh" /usr/local/bin/aio_gentle 2>/dev/null
+    echo -e "${C_DIM}Установка алиаса aio_gentle...${C_BASE}"
+    curl -4 -sSL --retry 3 --connect-timeout 5 "$REPO_RAW_URL/main.sh" -o /usr/local/bin/aio_gentle
+    chmod +x /usr/local/bin/aio_gentle
+    clear
 fi
 
 options=(
@@ -301,7 +301,7 @@ while true; do
         "IP Region Check")               step_ipregion ;;
         "Спидтесты (Ookla & iPerf3)")    step_speedtests_menu; NEEDS_PAUSE=0 ;;
         "CensorCheck (ТСПУ / DPI)")      step_censorcheck ;;
-        "IP Репутация")  step_ipquality ;;
+        "IP Репутация")                  step_ipquality ;;
         
         "Информация")                    step_info ;;
         "Обновить утилиту")              step_update_script ;;
