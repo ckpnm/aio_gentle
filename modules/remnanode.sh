@@ -1,7 +1,33 @@
 #!/bin/bash
 
-# Переменная с сырой ссылкой на папку src
-SRC_RAW_URL="${REPO_RAW_URL}/src"
+# Функция-бронетанк для безопасного скачивания шаблонов с зеркалами
+download_template() {
+    local file_name="$1"
+    local output_file="$2"
+    local sed_pattern="$3"
+    
+    local mirrors=(
+        "$REPO_RAW_URL/src"
+        "https://ghproxy.net/$REPO_RAW_URL/src"
+        "https://fastly.jsdelivr.net/gh/ckpnm/aio_gentle@main/src"
+    )
+
+    for base_url in "${mirrors[@]}"; do
+        if [[ -n "$sed_pattern" ]]; then
+            curl -4 -sL --retry 2 --connect-timeout 5 "$base_url/$file_name" 2>/dev/null | sed -E "$sed_pattern" > "$output_file"
+        else
+            curl -4 -sL --retry 2 --connect-timeout 5 "$base_url/$file_name" -o "$output_file" 2>/dev/null
+        fi
+        
+        # Проверяем, что файл не пустой (весит хотя бы больше 10 байт)
+        if [ -s "$output_file" ] && [ $(wc -c < "$output_file") -gt 10 ]; then
+            return 0
+        fi
+    done
+    
+    echo -e "\n  ${C_ERR}Критическая ошибка: Не удалось скачать шаблон $file_name${C_BASE}" >&2
+    return 1
+}
 
 # ==========================================
 # ПОЛУЧЕНИЕ ВЕРСИЙ С DOCKER HUB
@@ -15,10 +41,8 @@ _choose_node_version() {
     echo -e "\n  ${C_DIM}Связь с Docker Hub для получения версий...${C_BASE}\n"
     
     local fetched_versions
-    # Получаем теги, вырезаем мусор (dev, alpha) и берем 3 самых свежих
-    fetched_versions=$(curl -s --max-time 5 "https://hub.docker.com/v2/repositories/remnawave/node/tags/?page_size=20" | grep -Eo '"name": ?"[^"]+"' | cut -d'"' -f4 | grep -vE 'latest|dev|alpha|beta' | sort -rV | head -n 3)
+    fetched_versions=$(curl -4 -s --max-time 5 "https://hub.docker.com/v2/repositories/remnawave/node/tags/?page_size=20" | grep -Eo '"name": ?"[^"]+"' | cut -d'"' -f4 | grep -vE 'latest|dev|alpha|beta' | sort -rV | head -n 3)
     
-    # Фолбек на случай, если Docker Hub недоступен
     if [[ -z "$fetched_versions" ]]; then
         fetched_versions="2.7.0"
     fi
@@ -55,7 +79,7 @@ _do_docker() {
     export DEBIAN_FRONTEND=noninteractive
     if ! command -v docker &> /dev/null; then
         apt-get update -y > /dev/null 2>&1
-        curl -fsSL https://get.docker.com | sh > /dev/null 2>&1
+        curl -4 -fsSL https://get.docker.com | sh > /dev/null 2>&1
         systemctl enable docker > /dev/null 2>&1
         systemctl start docker > /dev/null 2>&1
     fi
@@ -67,27 +91,6 @@ _do_docker() {
 step_docker_setup() {
     draw_sub_header "Среда Docker"
     run_task "Установка Docker Engine и Compose Plugin" "_do_docker"
-}
-
-step_caddy_selfsteal() {
-    draw_sub_header "Caddy Selfsteal"
-    read -p "Введите домен сервера (например, node.example.com): " DOMAIN
-    if [[ -z "$DOMAIN" ]]; then
-        echo -e "${C_ERR}Ошибка: Домен не может быть пустым!${C_BASE}"
-        return 1
-    fi
-
-    SERVER_IP=$(curl -s https://ipinfo.io/ip || curl -s https://api.ipify.org || curl -s https://ifconfig.me)
-    DOMAIN_IP=$(dig +short A "$DOMAIN" 2>/dev/null | tail -n1)
-    if [[ "$DOMAIN_IP" != "$SERVER_IP" ]]; then
-        echo -e "${C_DIM}[ВНИМАНИЕ] Домен указывает на IP ($DOMAIN_IP), текущий хост: $SERVER_IP.${C_BASE}"
-    fi
-
-    _do_selfsteal() {
-        _do_docker
-        printf "%s\n1\n9443\ny\n" "$DOMAIN" | bash <(curl -Ls https://github.com/DigneZzZ/remnawave-scripts/raw/main/selfsteal.sh) @ install
-    }
-    run_task "Генерация маскировки и запуск Caddy Selfsteal" "_do_selfsteal"
 }
 
 # ==========================================
@@ -141,8 +144,7 @@ step_remnanode_setup() {
         mkdir -p /opt/remnanode /var/log/xray
         chmod 777 /var/log/xray
 
-        # Скачиваем шаблон, подставляем SECRET_KEY и выбранную ВЕРСИЮ ноды
-        curl -sL "${SRC_RAW_URL}/docker-compose-bare.yml" | sed -E "s|#SECRET_KEY#|$SECRET_KEY|g; s|image: remnawave/node:.*|image: remnawave/node:${SELECTED_NODE_VERSION}|g" > /opt/remnanode/docker-compose.yml
+        download_template "docker-compose-bare.yml" "/opt/remnanode/docker-compose.yml" "s|#SECRET_KEY#|$SECRET_KEY|g; s|image: remnawave/node:.*|image: remnawave/node:${SELECTED_NODE_VERSION}|g" || exit 1
 
         cd /opt/remnanode
         docker compose down &>/dev/null || true
@@ -169,12 +171,12 @@ step_node_caddy() {
 
     _do_node_caddy() {
         _do_docker
-        mkdir -p /opt/remnanode /var/www/html
-        curl -sSL "https://raw.githubusercontent.com/legiz-ru/Orion/refs/heads/main/index.html" -o /var/www/html/index.html
+        mkdir -p /opt/remnanode /var/www/html /var/log/xray
+        chmod 777 /var/log/xray
+        curl -sSL -4 "https://raw.githubusercontent.com/legiz-ru/Orion/refs/heads/main/index.html" -o /var/www/html/index.html
 
-        # Качаем шаблоны и подставляем переменные + версию
-        curl -sL "${SRC_RAW_URL}/docker-compose-caddy.yml" | sed -E "s|#SECRET_KEY#|$SECRET_KEY|g; s|#DOMAIN#|$DOMAIN|g; s|image: remnawave/node:.*|image: remnawave/node:${SELECTED_NODE_VERSION}|g" > /opt/remnanode/docker-compose.yml
-        curl -sL "${SRC_RAW_URL}/Caddyfile" > /opt/remnanode/Caddyfile
+        download_template "docker-compose-caddy.yml" "/opt/remnanode/docker-compose.yml" "s|#SECRET_KEY#|$SECRET_KEY|g; s|#DOMAIN#|$DOMAIN|g; s|image: remnawave/node:.*|image: remnawave/node:${SELECTED_NODE_VERSION}|g" || exit 1
+        download_template "Caddyfile" "/opt/remnanode/Caddyfile" "" || exit 1
 
         ufw allow 80/tcp > /dev/null 2>&1
         ufw allow from $PANEL_IP to any port 2222 > /dev/null 2>&1
@@ -192,7 +194,7 @@ step_node_caddy() {
     echo -e "  ${C_DIM}----------------------------------------${C_BASE}"
     echo -e "  ${C_ACCENT}\"dest\": \"/dev/shm/nginx.sock\",${C_BASE}"
     echo -e "  ${C_ACCENT}\"show\": false,${C_BASE}"
-    echo -e "  ${C_ACCENT}\"xver\": 1${C_BASE}"
+    echo -e "  ${C_ERR}\"xver\": 0${C_BASE} ${C_DIM}(0 - обязательно для Caddy)${C_BASE}"
     echo -e "  ${C_DIM}----------------------------------------${C_BASE}"
     echo -e "  ${C_WHITE}SNI: ${C_ACCENT}${DOMAIN}${C_BASE}\n"
 }
@@ -217,10 +219,10 @@ step_node_nginx() {
 
     _do_node_nginx() {
         _do_docker
-        mkdir -p /opt/remnanode /var/www/html
-        curl -sSL "https://raw.githubusercontent.com/legiz-ru/Orion/refs/heads/main/index.html" -o /var/www/html/index.html
+        mkdir -p /opt/remnanode /var/www/html /var/log/xray
+        chmod 777 /var/log/xray
+        curl -sSL -4 "https://raw.githubusercontent.com/legiz-ru/Orion/refs/heads/main/index.html" -o /var/www/html/index.html
 
-        # Жестко освобождаем 80 порт
         docker stop caddy-remnawave remnawave-nginx &>/dev/null || true
         systemctl stop nginx &>/dev/null || true
         fuser -k 80/tcp &>/dev/null || true
@@ -249,9 +251,8 @@ step_node_nginx() {
             return 1
         fi
 
-        # Качаем шаблоны и подставляем переменные + версию
-        curl -sL "${SRC_RAW_URL}/docker-compose-nginx.yml" | sed -E "s|#SECRET_KEY#|$SECRET_KEY|g; s|#DOMAIN#|$DOMAIN|g; s|image: remnawave/node:.*|image: remnawave/node:${SELECTED_NODE_VERSION}|g" > /opt/remnanode/docker-compose.yml
-        curl -sL "${SRC_RAW_URL}/nginx.conf" | sed "s|#DOMAIN#|$DOMAIN|g" > /opt/remnanode/nginx.conf
+        download_template "docker-compose-nginx.yml" "/opt/remnanode/docker-compose.yml" "s|#SECRET_KEY#|$SECRET_KEY|g; s|#DOMAIN#|$DOMAIN|g; s|image: remnawave/node:.*|image: remnawave/node:${SELECTED_NODE_VERSION}|g" || exit 1
+        download_template "nginx.conf" "/opt/remnanode/nginx.conf" "s|#DOMAIN#|$DOMAIN|g" || exit 1
 
         ufw allow from $PANEL_IP to any port 2222 > /dev/null 2>&1
         ufw reload > /dev/null 2>&1
@@ -268,7 +269,7 @@ step_node_nginx() {
     echo -e "  ${C_DIM}----------------------------------------${C_BASE}"
     echo -e "  ${C_ACCENT}\"dest\": \"/dev/shm/nginx.sock\",${C_BASE}"
     echo -e "  ${C_ACCENT}\"show\": false,${C_BASE}"
-    echo -e "  ${C_ACCENT}\"xver\": 1${C_BASE}"
+    echo -e "  ${C_ACCENT}\"xver\": 1${C_BASE} ${C_DIM}(1 - для Nginx)${C_BASE}"
     echo -e "  ${C_DIM}----------------------------------------${C_BASE}"
     echo -e "  ${C_WHITE}SNI: ${C_ACCENT}${DOMAIN}${C_BASE}\n"
 }
@@ -302,45 +303,25 @@ step_remove_remnanode() {
 # ФЕЙК-САЙТ И РОТАЦИЯ
 # ==========================================
 step_random_html() {
-    local tpl_options=(
-        "--- ВЫБЕРИТЕ ИСТОЧНИК ШАБЛОНОВ ---"
-        "Simple Web Templates (Полноценные сайты)"
-        "SNI Templates (Популярные лендинги)"
-        "Nothing Templates (Минималистичные заглушки)"
-        "Отмена"
-    )
+    draw_sub_header "Установка фейк-сайта (SelfSteal)"
     
-    render_menu "${tpl_options[@]}"
-    local choice=$MENU_CHOICE
-    local selected="${tpl_options[$choice]}"
+    echo -e "  ${C_WHITE}Выберите источник (репозиторий) шаблонов:${C_BASE}"
+    echo -e "  ${C_ACCENT}1.${C_BASE} Simple Web Templates (Полноценные сайты)"
+    echo -e "  ${C_ACCENT}2.${C_BASE} SNI Templates (Популярные лендинги)"
+    echo -e "  ${C_ACCENT}3.${C_BASE} Nothing Templates (Минималистичные заглушки)"
+    echo -e "  ${C_DIM}0. Отмена${C_BASE}\n"
+    
+    read -p "  Ваш выбор: " TPL_CHOICE
     
     local REPO_URL=""
     local REPO_DIR=""
-    local TPL_CHOICE=""
-    
-    case "$selected" in
-        "Simple Web Templates (Полноценные сайты)")
-            REPO_URL="https://github.com/eGamesAPI/simple-web-templates/archive/refs/heads/main.zip"
-            REPO_DIR="simple-web-templates-main"
-            TPL_CHOICE=1
-            ;;
-        "SNI Templates (Популярные лендинги)")
-            REPO_URL="https://github.com/distillium/sni-templates/archive/refs/heads/main.zip"
-            REPO_DIR="sni-templates-main"
-            TPL_CHOICE=2
-            ;;
-        "Nothing Templates (Минималистичные заглушки)")
-            REPO_URL="https://github.com/prettyleaf/nothing-sni/archive/refs/heads/main.zip"
-            REPO_DIR="nothing-sni-main"
-            TPL_CHOICE=3
-            ;;
-        "Отмена" | *)
-            return 0
-            ;;
+    case "$TPL_CHOICE" in
+        1) REPO_URL="https://github.com/eGamesAPI/simple-web-templates/archive/refs/heads/main.zip"; REPO_DIR="simple-web-templates-main" ;;
+        2) REPO_URL="https://github.com/distillium/sni-templates/archive/refs/heads/main.zip"; REPO_DIR="sni-templates-main" ;;
+        3) REPO_URL="https://github.com/prettyleaf/nothing-sni/archive/refs/heads/main.zip"; REPO_DIR="nothing-sni-main" ;;
+        0) return 0 ;;
+        *) echo -e "${C_ERR}Неверный выбор.${C_BASE}"; return 1 ;;
     esac
-
-    clear
-    draw_sub_header "Установка фейк-сайта (SelfSteal)"
 
     _do_random_html() {
         cd /tmp
