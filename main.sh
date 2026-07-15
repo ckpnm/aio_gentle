@@ -32,7 +32,7 @@ trap "cursor_on; echo; exit" SIGINT
 
 pause() {
     cursor_off
-    echo -e "\n${C_OK}Нажми любую клавишу для возврата...${C_BASE}"
+    echo -e "\n${C_OK}Нажми ENTER для возврата...${C_BASE}"
     read -rsn1
 }
 
@@ -230,7 +230,7 @@ _sync_core_modules() {
     done
 }
 
-echo -e "${C_DIM}Синхронизация модулей ΛIO...${C_BASE}"
+echo -e "${C_DIM}Синхронизация модулей AIO...${C_BASE}"
 export FORCE_UPDATE="1"
 _sync_core_modules
 clear
